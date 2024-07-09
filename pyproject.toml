@@ -1,0 +1,74 @@
+[tool.poetry]
+name = "spaceai"
+version = "0.0.1"
+description = ""
+authors = ["Valerio De Caro <valerio.decaro@phd.unipi.it>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.3.0"
+commitizen = "^3.12.0"
+pre-commit = "^3.5.0"
+pipx = "^1.2.1"
+ipykernel = "^6.27.0"
+isort = "^5.13.2"
+pycln = "^2.4.0"
+pylint = "^3.1.0"
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
+pytest-cov = "^4.1.0"
+pytest-xdist = "^3.5.0"
+
+[tool.poetry.group.docs]
+optional = true
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.2.6"
+sphinx-copybutton = "^0.5.2"
+sphinx-book-theme = "^1.1.2"
+jinja2 = "^3.1.4"
+docformatter = { extras = ["tomli"], version = "^1.7.5" }
+sphinx-autobuild = "^2024.2.4"
+enum-tools = { extras = ["sphinx"], version = "^0.11.0" }
+sphinx-favicon = "^1.0.1"
+sphinx-design = "^0.5.0"
+myst-parser = "^2.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.0.1"
+tag_format = "$version"
+version_files = ["pyproject.toml:version", "eclypse/__init__.py:__version__"]
+
+[tool.pycln]
+all = true
+
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 2
+filter_files = true
+skip = ["__init__.py"]
+
+[tool.docformatter]
+recursive = true
+black = true
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+addopts = "--cov-report=xml --cov-report=term-missing --cov"
+filterwarnings = ["ignore::DeprecationWarning"]
