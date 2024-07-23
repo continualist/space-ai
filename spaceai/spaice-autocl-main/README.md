@@ -1,0 +1,116 @@
+# Codebase for AutoCL Patent (v1.0): "Efficient and Autonomous Spacecraft Anomaly Detection with Echo State Networks and Adaptive Hyperparameter Tuning"
+
+We propose an anomaly detection framework for analyzing temporal telemetry data that is scalable, efficient, and autonomous, capable of operating within the spacecraft. Our approach achieves scalability and efficiency by employing Echo State Networks and a nonparametric dynamic thresholding technique to detect anomalies. Furthermore, our framework autonomously selects the best learning model by employing a functional ANOVA for adaptive hyperparameter optimization, allowing us to determine the most effective configuration based on the spacecraft’s input telemetry data. We validate the proposed methodology on two NASA telemetry datasets, demonstrating significant advantages over baseline approaches in terms of training time and energy efficiency, without compromising prediction quality.
+
+# Getting Started (from telemanom repo)
+
+Clone the original telemanom repo (only available from source currently):
+
+```sh
+git clone https://github.com/khundman/telemanom.git && cd telemanom
+```
+
+Configure system/modeling parameters in `config.yaml` file (to recreate experiment from paper, leave as is). For example:
+- `train: True`  if `True`, a new model will be trained for each input stream. If `False` (default) existing trained model will be loaded and used to generate predictions
+- `predict: True`  Generate new predictions using models. If `False` (default), use existing saved predictions in evaluation (useful for tuning error thresholding and skipping prior processing steps)
+- `l_s: 250` Determines the number of previous timesteps input to the model at each timestep `t` (used to generate predictions)  
+
+
+#### To run with local or virtual environment
+
+From root of repo, curl and unzip data:
+
+```sh
+curl -O https://s3-us-west-2.amazonaws.com/telemanom/data.zip && unzip data.zip && rm data.zip
+``` 
+
+Install dependencies using **python 3.6+** (recommend using a virtualenv):
+
+```sh
+pip install -r requirements.txt
+```
+
+Begin processing (from root of repo):
+
+```sh
+# rerun experiment detailed in paper or run with your own set of labeled anomlies
+python example.py -l labeled_anomalies.csv
+
+# run without labeled anomalies
+python example.py
+```
+
+Plotly is used to generate interactive inline plots, e.g.:
+
+<p align="center">
+<img src="https://s3-us-west-2.amazonaws.com/telemanom/result-viewer.png" alt="drawing2" height="350"/>
+</p>
+
+# NASA Data
+
+## Using your own data
+
+Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input. 
+
+For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`. 
+
+
+## Raw experiment data
+
+The raw data available for download represents real spacecraft telemetry data and anomalies from the Soil Moisture Active Passive satellite (SMAP) and the Curiosity Rover on Mars (MSL). All data has been anonymized with regard to time and all telemetry values are pre-scaled between `(-1,1)` according to the min/max in the test set. Channel IDs are also anonymized, but the first letter gives indicates the type of channel (`P` = power, `R` = radiation, etc.). Model input data also includes one-hot encoded information about commands that were sent or received by specific spacecraft modules in a given time window. No identifying information related to the timing or nature of commands is included in the data. For example:
+
+<p align="center">
+<img src="https://s3-us-west-2.amazonaws.com/telemanom/example-combined.png" alt="drawing" height="570"/>
+</p>
+
+This data also includes pre-split test and training data, pre-trained models, predictions, and smoothed errors generated using the default settings in `config.yaml`. When getting familiar with the repo, running the `result-viewer.ipynb` notebook to visualize results is useful for developing intuition. The included data also is useful for isolating portions of the system. For example, if you wish to see the effects of changes to the thresholding parameters without having to train new models, you can set `Train` and `Predict` to `False` in `config.yaml` to use previously generated predictions from prior models. 
+
+## Anomaly labels and metadata
+
+The anomaly labels and metadata are available in `labeled_anomalies.csv`, which includes:
+
+- `channel id`: anonymized channel id - first letter represents nature of channel (P = power, R = radiation, etc.)
+- `spacecraft`: spacecraft that generated telemetry stream
+- `anomaly_sequences`: start and end indices of true anomalies in stream
+- `class`: the class of anomaly (see paper for discussion)
+- `num values`: number of telemetry values in each stream
+
+To provide your own labels, use the `labeled_anomalies.csv` file as a template. The only required fields/columns are `channel_id` and `anomaly_sequences`. `anomaly_sequences` is a list of lists that contain start and end indices of anomalous regions in the test dataset for a channel.
+
+## Dataset and performance statistics:
+
+#### Data
+|								  | SMAP 	  | MSL		 | Total   |
+| ------------------------------- |	:-------: |	:------: | :------:|				  
+| Total anomaly sequences 		  | 69        | 36		 | 105	   |
+| *Point* anomalies (% tot.)	  | 43 (62%)  | 19 (53%) | 62 (59%)|
+| *Contextual* anomalies (% tot.) | 26 (38%)  | 17 (47%) | 43 (41%)|
+| Unique telemetry channels		  | 55        | 27		 | 82	   |
+| Unique ISAs					  | 28		  | 19		 | 47	   |
+| Telemetry values evaluated	  | 429,735	  | 66,709   | 496,444 |
+
+#### Performance (with default params specified in paper)
+| Spacecraft		| Precision | Recall   | F_0.5 Score |
+| ----------------- | :-------: | :------: | :------: |					  
+| SMAP 		  		| 85.5%     | 85.5%	   | 0.71	  |	
+| Curiosity (MSL)	| 92.6%  	| 69.4%    | 0.69     |
+| Total 			| 87.5% 	| 80.0%	   | 0.71     |
+
+# Processing
+
+Each time the system is started a unique datetime ID (ex. `2018-05-17_16.28.00`) will be used to create the following
+- a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info 
+- a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing. 
+
+# Citation
+
+TBD
+
+# License 
+
+TBD
+
+Contact: -
+
+# Contributors
+TBD
