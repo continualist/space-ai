@@ -1,16 +1,27 @@
-from typing import Optional, Callable, Union
+"""Reservoir module for Echo State Networks."""
+
+from typing import (
+    Callable,
+    Optional,
+    Union,
+)
 
 import torch
 import torch.nn.functional as F
-from torch import Tensor, Size
-from torch.nn import Module, Parameter
+from torch import (
+    Size,
+    Tensor,
+)
+from torch.nn import (
+    Module,
+    Parameter,
+)
 
 from . import initializers
 
 
 class Reservoir(Module):
-    """
-    A Reservoir of for Echo State Networks
+    """A Reservoir of for Echo State Networks.
 
     Args:
         input_size: the number of expected features in the input `x`
@@ -50,13 +61,15 @@ class Reservoir(Module):
         self.rho = Parameter(torch.tensor(rho), requires_grad=False)
 
         self.W_in = Parameter(
-            init_params(kernel_initializer, scale=input_scaling)(
+            init_params(str(kernel_initializer), scale=input_scaling)(
                 [hidden_size, input_size]
             ),
             requires_grad=False,
         )
         self.W_hat = Parameter(
-            init_params(recurrent_initializer, rho=rho)([hidden_size, hidden_size]),
+            init_params(str(recurrent_initializer), rho=rho)(
+                [hidden_size, hidden_size]
+            ),
             requires_grad=False,
         )
         self.b = (
@@ -87,6 +100,7 @@ class Reservoir(Module):
         initial_state: Optional[Tensor] = None,
         mask: Optional[Tensor] = None,
     ) -> Tensor:
+        """Computes the forward pass of the reservoir."""
         if initial_state is None:
             initial_state = torch.zeros(self.hidden_size).to(self.W_hat)
         _fwd_comp = (
@@ -106,9 +120,11 @@ class Reservoir(Module):
         timesteps = input.shape[0]
         state = initial_state
         for t in range(timesteps):
-            in_signal_t = F.linear(
+            in_signal_t = F.linear(  # pylint: disable=not-callable
                 input[t].to(self.W_in), self.W_in, self.b
-            ) + F.linear(state, self.W_hat)
+            ) + F.linear(  # pylint: disable=not-callable
+                state, self.W_hat
+            )
             if self.net_gain_and_bias:
                 in_signal_t = in_signal_t * self.net_a + self.net_b
             h_t = torch.tanh(in_signal_t)
@@ -117,21 +133,18 @@ class Reservoir(Module):
 
     @property
     def input_size(self) -> int:
-        """Input dimension"""
+        """Input dimension."""
         return self.W_in.shape[1]
 
     @property
     def hidden_size(self) -> int:
-        """Reservoir state dimension"""
+        """Reservoir state dimension."""
         return self.W_hat.shape[1]
 
 
 def init_params(name: str, **options) -> Callable[[Size], Tensor]:
-    """
-    Gets a random weight initializer
-    :param name: Name of the random matrix generator in `esn.initializers`
-    :param options: Random matrix generator options
-    :return: A random weight generator function
-    """
+    """Gets a random weight initializer :param name: Name of the random matrix generator
+    in `esn.initializers` :param options: Random matrix generator options :return: A
+    random weight generator function."""
     init = getattr(initializers, name)
     return lambda size: init(size, **options)

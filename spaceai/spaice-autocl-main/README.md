@@ -13,7 +13,7 @@ git clone https://github.com/khundman/telemanom.git && cd telemanom
 Configure system/modeling parameters in `config.yaml` file (to recreate experiment from paper, leave as is). For example:
 - `train: True`  if `True`, a new model will be trained for each input stream. If `False` (default) existing trained model will be loaded and used to generate predictions
 - `predict: True`  Generate new predictions using models. If `False` (default), use existing saved predictions in evaluation (useful for tuning error thresholding and skipping prior processing steps)
-- `l_s: 250` Determines the number of previous timesteps input to the model at each timestep `t` (used to generate predictions)  
+- `l_s: 250` Determines the number of previous timesteps input to the model at each timestep `t` (used to generate predictions)
 
 
 #### To run with local or virtual environment
@@ -22,7 +22,7 @@ From root of repo, curl and unzip data:
 
 ```sh
 curl -O https://s3-us-west-2.amazonaws.com/telemanom/data.zip && unzip data.zip && rm data.zip
-``` 
+```
 
 Install dependencies using **python 3.6+** (recommend using a virtualenv):
 
@@ -50,9 +50,9 @@ Plotly is used to generate interactive inline plots, e.g.:
 
 ## Using your own data
 
-Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input. 
+Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input.
 
-For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`. 
+For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`.
 
 
 ## Raw experiment data
@@ -63,7 +63,7 @@ The raw data available for download represents real spacecraft telemetry data an
 <img src="https://s3-us-west-2.amazonaws.com/telemanom/example-combined.png" alt="drawing" height="570"/>
 </p>
 
-This data also includes pre-split test and training data, pre-trained models, predictions, and smoothed errors generated using the default settings in `config.yaml`. When getting familiar with the repo, running the `result-viewer.ipynb` notebook to visualize results is useful for developing intuition. The included data also is useful for isolating portions of the system. For example, if you wish to see the effects of changes to the thresholding parameters without having to train new models, you can set `Train` and `Predict` to `False` in `config.yaml` to use previously generated predictions from prior models. 
+This data also includes pre-split test and training data, pre-trained models, predictions, and smoothed errors generated using the default settings in `config.yaml`. When getting familiar with the repo, running the `result-viewer.ipynb` notebook to visualize results is useful for developing intuition. The included data also is useful for isolating portions of the system. For example, if you wish to see the effects of changes to the thresholding parameters without having to train new models, you can set `Train` and `Predict` to `False` in `config.yaml` to use previously generated predictions from prior models.
 
 ## Anomaly labels and metadata
 
@@ -81,7 +81,7 @@ To provide your own labels, use the `labeled_anomalies.csv` file as a template. 
 
 #### Data
 |								  | SMAP 	  | MSL		 | Total   |
-| ------------------------------- |	:-------: |	:------: | :------:|				  
+| ------------------------------- |	:-------: |	:------: | :------:|
 | Total anomaly sequences 		  | 69        | 36		 | 105	   |
 | *Point* anomalies (% tot.)	  | 43 (62%)  | 19 (53%) | 62 (59%)|
 | *Contextual* anomalies (% tot.) | 26 (38%)  | 17 (47%) | 43 (41%)|
@@ -91,22 +91,22 @@ To provide your own labels, use the `labeled_anomalies.csv` file as a template. 
 
 #### Performance (with default params specified in paper)
 | Spacecraft		| Precision | Recall   | F_0.5 Score |
-| ----------------- | :-------: | :------: | :------: |					  
-| SMAP 		  		| 85.5%     | 85.5%	   | 0.71	  |	
+| ----------------- | :-------: | :------: | :------: |
+| SMAP 		  		| 85.5%     | 85.5%	   | 0.71	  |
 | Curiosity (MSL)	| 92.6%  	| 69.4%    | 0.69     |
 | Total 			| 87.5% 	| 80.0%	   | 0.71     |
 
 # Processing
 
 Each time the system is started a unique datetime ID (ex. `2018-05-17_16.28.00`) will be used to create the following
-- a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info 
-- a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing. 
+- a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info
+- a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing.
 
 # Citation
 
 TBD
 
-# License 
+# License
 
 TBD
 

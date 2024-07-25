@@ -1,7 +1,12 @@
+"""Module for initializing tensors in a neural network model."""
+
 from typing import Optional
 
 import torch
-from torch import Size, Tensor
+from torch import (
+    Size,
+    Tensor,
+)
 
 __all__ = ["uniform", "normal", "ring", "orthogonal", "ones", "zeros", "rescale_"]
 
@@ -12,8 +17,7 @@ def uniform(
     sigma: Optional[float] = None,
     scale: Optional[float] = None,
 ) -> Tensor:
-    """
-    Uniform random tensor. Can either be rescaled according to spectral radius `rho`,
+    """Uniform random tensor. Can either be rescaled according to spectral radius `rho`,
     spectral norm `sigma`, or `scale`.
 
     Args:
@@ -37,8 +41,7 @@ def normal(
     sigma: Optional[float] = None,
     scale: Optional[float] = None,
 ) -> Tensor:
-    """
-    Normal random tensor. Can either be rescaled according to spectral radius `rho`,
+    """Normal random tensor. Can either be rescaled according to spectral radius `rho`,
     spectral norm `sigma`, or `scale`.
 
     Args:
@@ -122,9 +125,8 @@ def ones(
     sigma: Optional[float] = None,
     scale: Optional[float] = None,
 ) -> Tensor:
-    """
-    Ones tensor. Can either be rescaled according to spectral radius `rho`,
-    spectral norm `sigma`, or `scale`.
+    """Ones tensor. Can either be rescaled according to spectral radius `rho`, spectral
+    norm `sigma`, or `scale`.
 
     Args:
         size (Size): shape of the tensor.
@@ -142,8 +144,7 @@ def ones(
 
 
 def zeros(size: Size, **kwargs) -> Tensor:
-    """
-    Zeros tensor.
+    """Zeros tensor.
 
     Args:
         size (Size): size of the tensor
@@ -161,8 +162,7 @@ def rescale_(
     sigma: Optional[float] = None,
     scale: Optional[float] = None,
 ) -> Tensor:
-    """
-    Rescale a matrix in-place. Can either be rescaled according to spectral radius
+    """Rescale a matrix in-place. Can either be rescaled according to spectral radius
     `rho`, spectral norm `sigma`, or `scale`.
 
     Args:
@@ -176,8 +176,17 @@ def rescale_(
         Tensor: initialized tensor.
     """
     if rho is not None:
-        return W.div_(torch.linalg.eigvals(W).abs().max()).mul_(rho).float()
-    elif sigma is not None:
-        return W.div_(torch.linalg.matrix_norm(W, ord=2)).mul_(sigma).float()
-    elif scale is not None:
+        return (
+            W.div_(torch.linalg.eigvals(W).abs().max())  # pylint: disable=not-callable
+            .mul_(rho)
+            .float()
+        )
+    if sigma is not None:
+        return (
+            W.div_(torch.linalg.matrix_norm(W, ord=2))  # pylint: disable=not-callable
+            .mul_(sigma)
+            .float()
+        )
+    if scale is not None:
         return W.mul_(scale).float()
+    return W

@@ -1,16 +1,25 @@
-import numpy as np
-import os
-import torch
-import logging
-from torch.utils.data import TensorDataset, DataLoader
+"""Load and shape channel values (predicted and actual) for ingestion into LSTM or
+ESN."""
 
-logger = logging.getLogger('telemanom')
+import logging
+import os
+
+import numpy as np
+import torch
+from torch.utils.data import (
+    DataLoader,
+    TensorDataset,
+)
+
+logger = logging.getLogger("telemanom")
 
 
 class Channel:
+    """Load and shape channel values (predicted and actual) for ingestion into LSTM or
+    ESN."""
+
     def __init__(self, config, chan_id, train_with_val=True):
-        """
-        Load and reshape channel values (predicted and actual).
+        """Load and reshape channel values (predicted and actual).
 
         Args:
             config (obj): Config object containing parameters for processing
@@ -49,8 +58,7 @@ class Channel:
 
     def shape_data(self, arr, train=True):
         """Shape raw input streams for ingestion into LSTM or ESN. config.l_s specifies
-        the sequence length of prior timesteps fed into the model at
-        each timestep t.
+        the sequence length of prior timesteps fed into the model at each timestep t.
 
         Args:
             arr (np array): array of input streams with
@@ -61,48 +69,70 @@ class Channel:
 
         data = []
         for i in range(len(arr) - self.config.l_s - self.config.n_predictions):
-            data.append(arr[i:i + self.config.l_s + self.config.n_predictions])
+            data.append(arr[i : i + self.config.l_s + self.config.n_predictions])
         data = np.array(data)
 
         assert len(data.shape) == 3
 
         if train:
             np.random.shuffle(data)
-            self.X_train = data[:, :-self.config.n_predictions, :]
-            self.y_train = data[:, -self.config.n_predictions:, 0]  # telemetry value is at position 0
+            self.X_train = data[:, : -self.config.n_predictions, :]
+            self.y_train = data[
+                :, -self.config.n_predictions :, 0
+            ]  # telemetry value is at position 0
 
             if self.train_with_val:
                 # Split the dataset into training and validation sets based on the validation_split ratio
                 valid_size = int(len(self.X_train) * self.config.validation_split)
-                train_dataset = TensorDataset(torch.Tensor(self.X_train[valid_size:]), torch.Tensor(self.y_train[valid_size:]))
-                valid_dataset = TensorDataset(torch.Tensor(self.X_train[:valid_size]), torch.Tensor(self.y_train[:valid_size]))
-                
+                train_dataset = TensorDataset(
+                    torch.Tensor(self.X_train[valid_size:]),
+                    torch.Tensor(self.y_train[valid_size:]),
+                )
+                valid_dataset = TensorDataset(
+                    torch.Tensor(self.X_train[:valid_size]),
+                    torch.Tensor(self.y_train[:valid_size]),
+                )
+
                 # Create DataLoaders for validation sets
-                self.valid_loader = DataLoader(valid_dataset, batch_size=self.config.batch_size, shuffle=False)
+                self.valid_loader = DataLoader(
+                    valid_dataset, batch_size=self.config.batch_size, shuffle=False
+                )
             else:
-                train_dataset = TensorDataset(torch.Tensor(self.X_train), torch.Tensor(self.y_train))
+                train_dataset = TensorDataset(
+                    torch.Tensor(self.X_train), torch.Tensor(self.y_train)
+                )
 
             # Create DataLoaders for training sets
-            self.train_loader = DataLoader(train_dataset, batch_size=self.config.batch_size, shuffle=True)
-            
-        else:
-            self.X_test = data[:, :-self.config.n_predictions, :]
-            self.y_test = data[:, -self.config.n_predictions:, 0]  # telemetry value is at position 0
+            self.train_loader = DataLoader(
+                train_dataset, batch_size=self.config.batch_size, shuffle=True
+            )
 
-            test_dataset = TensorDataset(torch.Tensor(self.X_test), torch.Tensor(self.y_test))
-            self.test_loader = DataLoader(test_dataset, batch_size=self.config.batch_size, shuffle=False)
+        else:
+            self.X_test = data[:, : -self.config.n_predictions, :]
+            self.y_test = data[
+                :, -self.config.n_predictions :, 0
+            ]  # telemetry value is at position 0
+
+            test_dataset = TensorDataset(
+                torch.Tensor(self.X_test), torch.Tensor(self.y_test)
+            )
+            self.test_loader = DataLoader(
+                test_dataset, batch_size=self.config.batch_size, shuffle=False
+            )
 
     def load_data(self):
-        """
-        Load train and test data from local.
-        """
+        """Load train and test data from local."""
         try:
-            self.train = np.load(os.path.join("data", "train", "{}.npy".format(self.id)))
+            self.train = np.load(
+                os.path.join("data", "train", "{}.npy".format(self.id))
+            )
             self.test = np.load(os.path.join("data", "test", "{}.npy".format(self.id)))
 
         except FileNotFoundError as e:
             logger.critical(e)
-            logger.critical("Source data not found, may need to add data to repo: <link>")
+            logger.critical(
+                "Source data not found, may need to add data to repo: <link>"
+            )
 
         self.shape_data(self.train)
         self.shape_data(self.test, train=False)

@@ -1,10 +1,19 @@
+"""Module containing functions for the ridge regression optimization of the readout."""
+
+from operator import itemgetter
+from typing import (
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+)
+
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-
 from torch import Tensor
-from typing import Literal, Optional, Tuple, List, Callable, Union
-from operator import itemgetter
+from torch.utils.data import DataLoader
 
 
 @torch.no_grad()
@@ -17,7 +26,7 @@ def fit_and_validate_readout(
     weights: Optional[List[float]] = None,
     preprocess_fn: Optional[Callable] = None,
     device: Optional[str] = None,
-) -> Tuple[Tensor, Tensor]:
+) -> Tuple[Tuple[Tensor, Tensor], float]:
     """Applies the ridge regression on the training data with all the given l2 values
     and returns the best configuration after evaluating the linear transformations on
     the validation data.
@@ -54,7 +63,7 @@ def fit_and_validate_readout(
 
     # Validation
     eval_scores = validate_readout(all_W, eval_loader, score_fn, preprocess_fn, device)
-    
+
     if not isinstance(eval_scores, List):
         eval_scores = [eval_scores]
 
@@ -62,7 +71,7 @@ def fit_and_validate_readout(
     select_fn = max if mode == "max" else min
     best_idx, best_score = select_fn(enumerate(eval_scores), key=itemgetter(1))
 
-    return all_W[best_idx], l2_values[best_idx], best_score
+    return ((all_W[best_idx], torch.tensor(l2_values[best_idx])), best_score)
 
 
 @torch.no_grad()
@@ -72,7 +81,7 @@ def fit_readout(
     l2: Optional[Union[float, List[float]]] = None,
     weights: Optional[List[float]] = None,
     device: Optional[str] = "cpu",
-) -> Tuple[Tensor, Tensor]:
+) -> Union[Tensor, List[Tensor]]:
     """Applies the ridge regression on the training data with all the given l2 values
     and returns a list of matrices, one for each L2 value.
 
@@ -95,8 +104,7 @@ def fit_readout(
     A, B = compute_ridge_matrices(train_loader, preprocess_fn, weights, device)
     if isinstance(l2, List):
         return [solve_ab_decomposition(A, B, curr_l2, device) for curr_l2 in l2]
-    else:
-        return solve_ab_decomposition(A, B, l2, device)
+    return solve_ab_decomposition(A, B, l2, device)
 
 
 @torch.no_grad()
@@ -148,7 +156,7 @@ def validate_readout(
         curr_n_samples = x.size(0)
         # Computing scores
         for i, W in enumerate(all_W):
-            y_pred = F.linear(x.to(W), W)
+            y_pred = F.linear(x.to(W), W)  # pylint: disable=not-callable
             score_W = score_fn(y, y_pred)
             eval_scores[i] += score_W * curr_n_samples
 
@@ -165,10 +173,9 @@ def compute_ridge_matrices(
     weights: Optional[List[float]] = None,
     device: Optional[str] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """
-    Computes the matrices A and B for incremental ridge regression. For each batch in
-    the loader, it applies the preprocess_fn on the x sample, resizes it to
-    (n_samples, hidden_size), and computes the values of A and B.
+    """Computes the matrices A and B for incremental ridge regression. For each batch in
+    the loader, it applies the preprocess_fn on the x sample, resizes it to (n_samples,
+    hidden_size), and computes the values of A and B.
 
     Args:
         loader (DataLoader): torch loader
@@ -218,10 +225,12 @@ def compute_ridge_matrices(
 
 @torch.no_grad()
 def solve_ab_decomposition(
-    A: torch.Tensor, B: torch.Tensor, l2: Optional[float] = None, device: Optional[str] = None
+    A: torch.Tensor,
+    B: torch.Tensor,
+    l2: Optional[float] = None,
+    device: Optional[str] = None,
 ) -> torch.Tensor:
-    """
-    Computes the result of the AB decomposition for solving the linear system
+    """Computes the result of the AB decomposition for solving the linear system.
 
     Args:
         A (torch.Tensor): YS^T
@@ -237,17 +246,16 @@ def solve_ab_decomposition(
     A, B = A.to(device), B.to(device)
     B = B + torch.eye(B.shape[0], device=B.device) * l2 if l2 else B
 
-    return A @ torch.linalg.pinv(B)
+    return A @ torch.linalg.pinv(B)  # pylint: disable=not-callable
 
 
 @torch.no_grad()
 def compress_ridge_matrices(
     A: Tensor, B: Tensor, perc_rec: float, alpha: float
 ) -> Tuple[Tensor, Tensor]:
-    """
-    Masks the matrices A and B according to the percentage of recurrent neurons to be used.
-    The `perc_rec` percentage of the most important recurrent neurons are used, where the
-    importance is measured by the sum of the squares of the columns of B.
+    """Masks the matrices A and B according to the percentage of recurrent neurons to be
+    used. The `perc_rec` percentage of the most important recurrent neurons are used,
+    where the importance is measured by the sum of the squares of the columns of B.
 
     Args:
         A (Tensor): YS^T
@@ -268,8 +276,6 @@ def compress_ridge_matrices(
         raise ValueError("perc_rec must be in [0, 1]")
     if alpha < 0 or alpha > 1:
         raise ValueError("alpha must be in [0, 1]")
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # number of recurrent neurons to be considered
     n = int(perc_rec * B.size(0))
@@ -292,7 +298,11 @@ def compress_ridge_matrices(
         rand_idxs = torch.tensor([])
 
     chosen_idxs = torch.hstack((topk_idxs, rand_idxs)).long()
-    mask = F.one_hot(chosen_idxs, B.size(0)).sum(0).unsqueeze(0)
+    mask = (
+        F.one_hot(chosen_idxs, B.size(0))  # pylint: disable=not-callable
+        .sum(0)
+        .unsqueeze(0)
+    )
 
     masked_A = A * mask
     masked_B = (mask.T @ mask) * B

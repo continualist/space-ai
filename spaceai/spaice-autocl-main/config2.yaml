@@ -20,7 +20,7 @@ batch_size: 70
 window_size: 30
 
 # Columns headers for output file
-header: ["run_id", "chan_id", "spacecraft", "num_anoms", "anomaly_sequences", "class", "true_positives", 
+header: ["run_id", "chan_id", "spacecraft", "num_anoms", "anomaly_sequences", "class", "true_positives",
         "false_positives", "false_negatives", "tp_sequences", "fp_sequences", "gaussian_p-value", "num_values",
         "normalized_error", "eval_time", "scores"]
 
@@ -48,7 +48,7 @@ epochs: 15
 # Size of input layer not listed - dependent on evr modules and types included (see 'evr_modules' and 'erv_types' above)
 layers: [80,80]
 
-# Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta 
+# Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta
 patience: 5
 min_delta: 0.0003
 
