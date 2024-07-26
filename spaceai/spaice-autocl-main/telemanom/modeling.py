@@ -27,9 +27,9 @@ def ESN(reserviors: List[esn.Reservoir]):  # pylint: disable=invalid-name
     return lambda x: functools.reduce(lambda res, f: f(res), reserviors, x)[:, -1:, :]
 
 
-def mse(y_pred: torch.Tensor, y_target: torch.Tensor) -> torch.Tensor:
+def mse(y_pred: torch.Tensor, y_target: torch.Tensor) -> float:
     """Mean squared error loss function."""
-    return ((y_pred - y_target) ** 2).mean()
+    return ((y_pred - y_target) ** 2).mean().item()
 
 
 class LSTMModel(nn.Module):
@@ -85,7 +85,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
         self.chan_id: str = channel.id
         self.run_id: str = run_id
         self.y_hat: np.ndarray = np.array([])
-        self.model: nn.Module = None
+        self.model: nn.Module
         self.input_size: int = channel.X_train.shape[2]
         self.device: torch.device = (
             torch.device(f"cuda:{config.cuda_id}")
@@ -143,7 +143,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
                         train_loss += loss.item() * inputs.size(0)
 
                     # Calculate average loss for the epoch
-                    train_loss /= len(channel.train_loader.dataset)
+                    train_loss /= len(channel.train_loader)
 
                     if channel.train_with_val:
                         # Validate the model
@@ -159,7 +159,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
                                 valid_loss += loss.item() * inputs.size(0)
 
                         # Calculate average loss for the validation set
-                        valid_loss /= len(channel.valid_loader.dataset)
+                        valid_loss /= len(channel.valid_loader)
 
                         pbar.set_description(
                             f"Epoch [{epoch+1}/{self.config.epochs}], "
@@ -223,7 +223,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
                         "min",
                         None,
                         ESN(self.reserviors),
-                        self.device,
+                        str(self.device),
                     )
                 )
                 return {"MSE": best_mse}
@@ -233,7 +233,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
                 ESN(self.reserviors),
                 self.config.l2,
                 None,
-                self.device,
+                str(self.device),
             )
 
             return

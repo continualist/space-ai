@@ -156,9 +156,9 @@ class Config:  # pylint: disable=too-many-public-methods
         self.dictionary["model_architecture"] = value
 
     @property
-    def l2(self) -> float:
+    def l2(self) -> List[float]:
         """Return L2 regularization."""
-        return self.dictionary.get("l2", 0.0)
+        return self.dictionary.get("l2", [0.0])
 
     @l2.setter
     def l2(self, value: List[float]):
@@ -171,7 +171,7 @@ class Config:  # pylint: disable=too-many-public-methods
         return self.dictionary.get("layers", [1])
 
     @layers.setter
-    def layers(self, value: int):
+    def layers(self, value: List[int]):
         """Set number of layers."""
         self.dictionary["layers"] = value
 
@@ -249,7 +249,7 @@ def make_dirs(_id: str):
                 "If loading prior models or predictions, must provide valid ID."
             )
 
-    paths: list[str] = [
+    paths: List[str] = [
         "data",
         f"data/{_id}",
         "data/logs",

@@ -231,7 +231,7 @@ class Detector:  # pylint: disable=too-many-instance-attributes
         for csv_files in result_stage1_csv_files:
             with open(csv_files, "r", encoding="utf-8") as csvfile:
                 self.result_df = pd.read_csv(csvfile)
-                self.id = self.result_df.iloc[0, 0]
+                self.id = str(self.result_df.iloc[0, 0])
                 final_result_path: str = os.path.join(
                     self.final_result_path, self.id, "time_tracking_results"
                 )
@@ -295,7 +295,7 @@ class Detector:  # pylint: disable=too-many-instance-attributes
         for csv_files in result_stage1_csv_files:
             with open(csv_files, "r", encoding="utf-8") as csvfile:
                 self.result_df = pd.read_csv(csvfile)
-                self.id = self.result_df.iloc[0, 0]
+                self.id = str(self.result_df.iloc[0, 0])
                 final_result_path: str = os.path.join(
                     self.final_result_path, self.id, "time_tracking_results"
                 )
@@ -329,8 +329,8 @@ class Detector:  # pylint: disable=too-many-instance-attributes
                             )
                         )
 
-                        mse: float = mean_squared_error(
-                            channel.y_test[:, 0], channel.y_hat
+                        mse: float = float(
+                            mean_squared_error(channel.y_test[:, 0], channel.y_hat)
                         )
                         tot_test_mes += mse
                         print(

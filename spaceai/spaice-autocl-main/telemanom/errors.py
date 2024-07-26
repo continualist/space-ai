@@ -256,8 +256,8 @@ class ErrorWindow:  # pylint: disable=too-many-instance-attributes
 
         self.e_s: np.ndarray = errors.e_s[start_idx:end_idx]
 
-        self.mean_e_s: float = np.mean(self.e_s)
-        self.sd_e_s: float = np.std(self.e_s)
+        self.mean_e_s: float = float(np.mean(self.e_s))
+        self.sd_e_s: float = float(np.std(self.e_s))
         self.e_s_inv: np.ndarray = np.array(
             [self.mean_e_s + (self.mean_e_s - e) for e in self.e_s]
         )
@@ -266,7 +266,7 @@ class ErrorWindow:  # pylint: disable=too-many-instance-attributes
         self.epsilon_inv: float = self.mean_e_s + self.sd_lim * self.sd_e_s
 
         self.y_test: np.ndarray = channel.y_test[start_idx:end_idx]
-        self.sd_values: float = np.std(self.y_test)
+        self.sd_values: float = float(np.std(self.y_test))
 
         self.perc_high: float
         self.perc_low: float
@@ -327,12 +327,12 @@ class ErrorWindow:  # pylint: disable=too-many-instance-attributes
                     (g[0], g[-1]) for g in groups if not g[0] == g[-1]
                 ]
 
-                mean_perc_decrease: float = (
-                    self.mean_e_s - np.mean(pruned_e_s)
-                ) / self.mean_e_s
-                sd_perc_decrease: float = (
-                    self.sd_e_s - np.std(pruned_e_s)
-                ) / self.sd_e_s
+                mean_perc_decrease: float = float(
+                    (self.mean_e_s - np.mean(pruned_e_s)) / self.mean_e_s
+                )
+                sd_perc_decrease: float = float(
+                    (self.sd_e_s - np.std(pruned_e_s)) / self.sd_e_s
+                )
                 score: float = (mean_perc_decrease + sd_perc_decrease) / (
                     len(E_seq) ** 2 + len(i_anom)
                 )
