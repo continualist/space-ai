@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 
 @torch.no_grad()
-def fit_and_validate_readout(
+def fit_and_validate_readout(  # pylint: disable=too-many-arguments
     train_loader: DataLoader,
     eval_loader: DataLoader,
     l2_values: List[float],
@@ -57,9 +57,11 @@ def fit_and_validate_readout(
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Training
-    all_W = fit_readout(train_loader, preprocess_fn, l2_values, weights, device)
+    all_W = fit_readout(  # pylint: disable=invalid-name
+        train_loader, preprocess_fn, l2_values, weights, device
+    )
     if not isinstance(all_W, List):
-        all_W = [all_W]
+        all_W = [all_W]  # pylint: disable=invalid-name
 
     # Validation
     eval_scores = validate_readout(all_W, eval_loader, score_fn, preprocess_fn, device)
@@ -101,14 +103,16 @@ def fit_readout(
         Tuple[Tensor, float, float]: a Tuple containing the best linear matrix, the
             corrisponding l2 value and the metric value.
     """
-    A, B = compute_ridge_matrices(train_loader, preprocess_fn, weights, device)
+    A, B = compute_ridge_matrices(  # pylint: disable=invalid-name
+        train_loader, preprocess_fn, weights, device
+    )
     if isinstance(l2, List):
         return [solve_ab_decomposition(A, B, curr_l2, device) for curr_l2 in l2]
     return solve_ab_decomposition(A, B, l2, device)
 
 
 @torch.no_grad()
-def validate_readout(
+def validate_readout(  # pylint: disable=too-many-locals
     readout: Union[torch.Tensor, List[torch.Tensor]],
     eval_loader: torch.utils.data.DataLoader,
     score_fn: Callable[[Tensor, Tensor], float],
@@ -140,7 +144,7 @@ def validate_readout(
         readout = [readout]
 
     # Validation
-    all_W = [w.to(device) for w in readout]
+    all_W = [w.to(device) for w in readout]  # pylint: disable=invalid-name
     eval_scores, n_samples = [0 for _ in range(len(readout))], 0
     for x, y in eval_loader:
         x, y = x.to(device), y.to(device)
@@ -155,9 +159,9 @@ def validate_readout(
 
         curr_n_samples = x.size(0)
         # Computing scores
-        for i, W in enumerate(all_W):
+        for i, W in enumerate(all_W):  # pylint: disable=invalid-name
             y_pred = F.linear(x.to(W), W)  # pylint: disable=not-callable
-            score_W = score_fn(y, y_pred)
+            score_W = score_fn(y, y_pred)  # pylint: disable=invalid-name
             eval_scores[i] += score_W * curr_n_samples
 
         n_samples += curr_n_samples
@@ -198,7 +202,7 @@ def compute_ridge_matrices(
     if weights is not None:
         weights = torch.tensor(weights).to(device)
 
-    A, B = None, None
+    A, B = None, None  # pylint: disable=invalid-name
     for x, y in loader:
         x = x.to(device)
         if preprocess_fn is not None:
@@ -214,19 +218,25 @@ def compute_ridge_matrices(
 
         if weights is not None:
             curr_w = torch.tensor(weights, device=device)[y.long()[:, 0]]
-            batch_A, batch_B = ((y.T * curr_w) @ x).cpu(), ((x.T * curr_w) @ x).cpu()
+            batch_A, batch_B = (  # pylint: disable=invalid-name
+                (y.T * curr_w) @ x
+            ).cpu(), ((x.T * curr_w) @ x).cpu()
         else:
-            batch_A, batch_B = (y.T @ x).cpu(), (x.T @ x).cpu()
+            batch_A, batch_B = (y.T @ x).cpu(), (  # pylint: disable=invalid-name
+                x.T @ x
+            ).cpu()
 
-        A, B = (A + batch_A, B + batch_B) if A is not None else (batch_A, batch_B)
+        A, B = (  # pylint: disable=invalid-name
+            (A + batch_A, B + batch_B) if A is not None else (batch_A, batch_B)
+        )
 
-    return A, B
+    return A, B  # pylint: disable=invalid-name
 
 
 @torch.no_grad()
 def solve_ab_decomposition(
-    A: torch.Tensor,
-    B: torch.Tensor,
+    A: torch.Tensor,  # pylint: disable=invalid-name
+    B: torch.Tensor,  # pylint: disable=invalid-name
     l2: Optional[float] = None,
     device: Optional[str] = None,
 ) -> torch.Tensor:
@@ -250,8 +260,8 @@ def solve_ab_decomposition(
 
 
 @torch.no_grad()
-def compress_ridge_matrices(
-    A: Tensor, B: Tensor, perc_rec: float, alpha: float
+def compress_ridge_matrices(  # pylint: disable=too-many-locals
+    A: Tensor, B: Tensor, perc_rec: float, alpha: float  # pylint: disable=invalid-name
 ) -> Tuple[Tensor, Tensor]:
     """Masks the matrices A and B according to the percentage of recurrent neurons to be
     used. The `perc_rec` percentage of the most important recurrent neurons are used,
@@ -304,7 +314,7 @@ def compress_ridge_matrices(
         .unsqueeze(0)
     )
 
-    masked_A = A * mask
-    masked_B = (mask.T @ mask) * B
+    masked_A = A * mask  # pylint: disable=invalid-name
+    masked_B = (mask.T @ mask) * B  # pylint: disable=invalid-name
 
     return masked_A, masked_B

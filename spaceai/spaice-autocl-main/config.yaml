@@ -85,7 +85,7 @@ net_gain_and_bias: False
 bias: False
 
 # The value of l2 regularization
-l2: 1e-10
+l2: [1e-10]
 
 # Error thresholding parameters
 # ==================================

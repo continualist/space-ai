@@ -52,7 +52,7 @@ repos:
     hooks:
       - id: pylint
         name: pylint
-        entry: .venv/bin/pylint
+        entry: pylint
         language: python
         types: [python]
 

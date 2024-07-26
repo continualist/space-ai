@@ -20,7 +20,7 @@ from torch.nn import (
 from . import initializers
 
 
-class Reservoir(Module):
+class Reservoir(Module):  # pylint: disable=too-many-instance-attributes
     """A Reservoir of for Echo State Networks.
 
     Args:
@@ -40,7 +40,7 @@ class Reservoir(Module):
             and ``b`` (bias) parameters. Default: ``False``
     """
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
         self,
         input_size: int,
         hidden_size: int,
@@ -60,13 +60,13 @@ class Reservoir(Module):
         self.input_scaling = Parameter(torch.tensor(input_scaling), requires_grad=False)
         self.rho = Parameter(torch.tensor(rho), requires_grad=False)
 
-        self.W_in = Parameter(
+        self.W_in = Parameter(  # pylint: disable=invalid-name
             init_params(str(kernel_initializer), scale=input_scaling)(
                 [hidden_size, input_size]
             ),
             requires_grad=False,
         )
-        self.W_hat = Parameter(
+        self.W_hat = Parameter(  # pylint: disable=invalid-name
             init_params(str(recurrent_initializer), rho=rho)(
                 [hidden_size, hidden_size]
             ),
@@ -96,7 +96,7 @@ class Reservoir(Module):
     @torch.no_grad()
     def forward(
         self,
-        input: Tensor,
+        input: Tensor,  # pylint: disable=redefined-builtin
         initial_state: Optional[Tensor] = None,
         mask: Optional[Tensor] = None,
     ) -> Tensor:
@@ -108,14 +108,19 @@ class Reservoir(Module):
         )
 
         embeddings = torch.stack(
-            [state for state in _fwd_comp(input.to(self.W_hat), initial_state, mask)],
+            [  # pylint: disable=unnecessary-comprehension
+                state for state in _fwd_comp(input.to(self.W_hat), initial_state, mask)
+            ],
             dim=0,
         )
 
         return embeddings
 
     def _state_comp(
-        self, input: Tensor, initial_state: Tensor, mask: Optional[Tensor] = None
+        self,
+        input: Tensor,  # pylint: disable=redefined-builtin
+        initial_state: Tensor,
+        mask: Optional[Tensor] = None,
     ):
         timesteps = input.shape[0]
         state = initial_state

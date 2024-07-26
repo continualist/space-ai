@@ -30,7 +30,7 @@ def uniform(
     Returns:
         Tensor: initialized tensor.
     """
-    W = torch.empty(size).uniform_(-1, 1)
+    W = torch.empty(size).uniform_(-1, 1)  # pylint: disable=invalid-name
     rescale_(W, rho, sigma, scale)
     return W.data
 
@@ -54,7 +54,7 @@ def normal(
     Returns:
         Tensor: initialized tensor.
     """
-    W = torch.empty(size).normal_(mean=0, std=1)
+    W = torch.empty(size).normal_(mean=0, std=1)  # pylint: disable=invalid-name
     rescale_(W, rho, sigma, scale)
     return W.data
 
@@ -85,7 +85,7 @@ def ring(
     assert any(arg is not None for arg in [rho, sigma, scale])
     if scale is None:
         scale = rho if sigma is None else sigma
-    W = torch.eye(size[0]).roll(1, 0) * scale
+    W = torch.eye(size[0]).roll(1, 0) * scale  # pylint: disable=invalid-name
     return W.data
 
 
@@ -114,7 +114,7 @@ def orthogonal(
     assert any(arg is not None for arg in [rho, sigma, scale])
     if scale is None:
         scale = rho if sigma is None else sigma
-    W = torch.empty(size)
+    W = torch.empty(size)  # pylint: disable=invalid-name
     torch.nn.init.orthogonal_(W, scale)
     return W.data
 
@@ -138,12 +138,12 @@ def ones(
     Returns:
         Tensor: initialized ones tensor.
     """
-    W = torch.ones(size)
+    W = torch.ones(size)  # pylint: disable=invalid-name
     rescale_(W, rho, sigma, scale)
     return W.data
 
 
-def zeros(size: Size, **kwargs) -> Tensor:
+def zeros(size: Size) -> Tensor:
     """Zeros tensor.
 
     Args:
@@ -152,12 +152,12 @@ def zeros(size: Size, **kwargs) -> Tensor:
     Returns:
         Tensor: zeros tensor.
     """
-    W = torch.zeros(size)
+    W = torch.zeros(size)  # pylint: disable=invalid-name
     return W.data
 
 
 def rescale_(
-    W: Tensor,
+    W: Tensor,  # pylint: disable=invalid-name
     rho: Optional[float] = None,
     sigma: Optional[float] = None,
     scale: Optional[float] = None,
