@@ -1,4 +1,4 @@
-"""SPAICE research PJ Main file to run experiments."""
+"""Main file to run experiments."""
 
 import argparse
 

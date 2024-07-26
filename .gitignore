@@ -161,8 +161,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 .DS_Store
-/spaceai/spaice-autocl-main/data
-/spaceai/spaice-autocl-main/final_results
-/spaceai/spaice-autocl-main/result_stage1
-.pre-commit-config.yaml
+/spaceai/benchmarks/nasa_bechmark/data
+/spaceai/benchmarks/nasa_bechmark/final_results
 .vscode/settings.json
