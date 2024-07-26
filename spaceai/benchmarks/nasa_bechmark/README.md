@@ -21,7 +21,7 @@ Install dependencies using **python 3.6+** (recommend using a virtualenv or cond
 pip install -r requirements.txt
 ```
 
-Begin processing (from root of repo):
+Begin processing (from ``` ./spaceai/benchmarks/nasa_benchmark ```):
 
 ```sh
 # rerun experiment labeled anomlies
