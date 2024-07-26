@@ -3,7 +3,7 @@
 Clone the repo:
 
 ```sh
-git clone https://github.com/continualist/space-ai.git 
+git clone https://github.com/continualist/space-ai.git
 ```
 
 
@@ -75,5 +75,3 @@ To provide your own labels, use the `labeled_anomalies.csv` file as a template. 
 Each time the system is started a unique datetime ID (ex. `2018-05-17_16.28.00`) will be used to create the following
 - a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info
 - a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing.
-
-
