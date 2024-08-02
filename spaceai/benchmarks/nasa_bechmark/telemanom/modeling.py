@@ -7,14 +7,14 @@ from typing import List
 
 import numpy as np
 import torch
+from esn.model import reservoir as esn
+from esn.optimization import ridge_regression
 from telemanom.channel import Channel
 from telemanom.helpers import Config
 from torch import (
     nn,
     optim,
 )
-from torch_esn.model import reservoir as esn
-from torch_esn.optimization import ridge_regression
 from tqdm import tqdm
 
 # suppress PyTorch CPU speedup warnings
@@ -35,7 +35,7 @@ def mse(y_pred: torch.Tensor, y_target: torch.Tensor) -> float:
 class LSTMModel(nn.Module):
     """LSTM model for predicting time series data."""
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self,
         input_size: int,
         hidden_sizes: List[int],
@@ -77,7 +77,7 @@ class LSTMModel(nn.Module):
         return out
 
 
-class Model:  # pylint: disable=too-many-instance-attributes
+class Model:
     """Model class for training and predicting with LSTM or ESN models."""
 
     def __init__(self, config: Config, run_id: str, channel: Channel):
@@ -111,9 +111,7 @@ class Model:  # pylint: disable=too-many-instance-attributes
 
         self.train_new(channel)
 
-    def train_new(  # pylint: disable=too-many-branches,inconsistent-return-statements
-        self, channel: Channel
-    ):
+    def train_new(self, channel: Channel):
         """Train LSTM model according to specifications in config.yaml.
 
         Args:

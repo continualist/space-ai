@@ -164,3 +164,8 @@ cython_debug/
 /spaceai/benchmarks/nasa_bechmark/data
 /spaceai/benchmarks/nasa_bechmark/final_results
 .vscode/settings.json
+/spaceai/benchmarks/nasa_bechmark/result_stage1
+/spaceai/benchmarks/nasa_bechmark/esn
+/spaceai/examples/data
+/spaceai/examples/final_results
+/spaceai/examples/result_stage1

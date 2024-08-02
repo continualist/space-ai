@@ -3,251 +3,110 @@
 import logging
 import os
 import sys
-from typing import (
-    Any,
-    Dict,
-    List,
-)
-
-import yaml  # type: ignore[import-untyped]
-
-# Remove the line where logger is redefined
-sys.path.append("../telemanom")
+from typing import List
 
 
-class Config:  # pylint: disable=too-many-public-methods
+class Config:
     """Loads parameters from config.yaml into global object."""
 
-    def __init__(self, path_to_config: str):
-        """Initialize the Config object.
+    def __init__(self):
+        self.model_architecture: str = "ESN"  # neural network architecture LSTM, ESN
+        self.num_sampler: int = 200
+        self.num_sampler2: int = 20
+        self.cpu: int = 1
+        self.cpu_adaptive: int = 1
+        self.train: bool = True  # train new or existing model for each channel
+        self.predict: bool = (
+            True  # generate new predicts or, if False, use predictions stored locally
+        )
+        self.use_id: int = 0
+        self.cuda_id: int = 0
+        self.batch_size: int = 70  # number of values to evaluate in each batch
+        self.window_size: int = (
+            30  # number of trailing batches to use in error calculation
+        )
+        self.header: list = [  # Columns headers for output file
+            "run_id",
+            "chan_id",
+            "spacecraft",
+            "num_anoms",
+            "anomaly_sequences",
+            "class",
+            "true_positives",
+            "false_positives",
+            "false_negatives",
+            "tp_sequences",
+            "fp_sequences",
+            "gaussian_p-value",
+            "num_values",
+            "normalized_error",
+            "eval_time",
+            "scores",
+        ]
+        self.smoothing_perc: float = (
+            0.05  # determines window size used in EWMA smoothing (percentage of total values for channel)
+        )
+        self.error_buffer: int = (
+            100  # number of values surrounding an error that are brought into the sequence (promotes grouping on nearby sequences
+        )
 
-        Args:
-            path_to_config (str): The path to the config.yaml file.
-        """
+        # model parameters
+        self.loss_metric: str = "mse"
+        self.optimizer: str = "adam"
+        self.learning_rate: float = 0.001
+        self.validation_split: float = 0.2
+        self.dropout: float = 0.3
+        self.lstm_batch_size: int = 64
+        self.esn_batch_number: int = 32
+        self.weight_decay: float = 0
+        self.epochs: int = (
+            15  # maximum number of epochs allowed (if early stopping criteria not met)
+        )
+        self.layers: list = [
+            80,
+            80,
+        ]  # network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
+        self.patience: int = (
+            5  # Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta
+        )
+        self.min_delta: float = 0.0003
+        self.l_s: int = (
+            250  # num previous timesteps provided to model to predict future values
+        )
+        self.n_predictions: int = 10  # number of steps ahead to predict
 
-        if os.path.isfile(path_to_config):
-            pass
-        else:
-            path_to_config = f"../{path_to_config}"
+        # Parameters only for ESN
+        self.activation: str = (
+            "tanh"  # Name of the activation function from `torch` (e.g. `torch.tanh`)
+        )
+        self.leakage: float = 1  # The value of the leaking parameter `alpha`
+        self.input_scaling: float = (
+            0.9  # The value for the desired scaling of the input (must be `<= 1`)
+        )
+        self.rho: float = (
+            0.99  # The desired spectral radius of the recurrent matrix (must be `< 1`)
+        )
+        self.kernel_initializer: str = (
+            "uniform"  # The kind of initialization of the input transformation. Default: `'uniform'`
+        )
+        self.recurrent_initializer: str = (
+            "normal"  # The kind of initialization of the recurrent matrix. Default: `'normal'`
+        )
+        self.net_gain_and_bias: bool = (
+            False  # If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Default: ``False``
+        )
+        self.bias: bool = False  # If ``False``, the layer does not use bias weights `b`
+        self.l2: list = [1e-10]  # The value of l2 regularization
 
-        with open(path_to_config, "r", encoding="utf-8") as f:
-            self.dictionary: Dict[str, Any] = yaml.load(
-                f.read(), Loader=yaml.FullLoader
-            )
-
-    @property
-    def train(self) -> bool:
-        """Return whether to train model."""
-        return self.dictionary.get("train", False)
-
-    @property
-    def predict(self) -> bool:
-        """Return whether to predict model."""
-        return self.dictionary.get("predict", False)
-
-    @property
-    def p(self) -> int:
-        """Return the threshold p."""
-        return self.dictionary.get("p", 1)
-
-    @property
-    def use_id(self) -> str:
-        """Return use ID."""
-        return self.dictionary.get("use_id", None)
-
-    @property
-    def l_s(self) -> int:
-        """Return sequence length."""
-        return self.dictionary.get("l_s", 100)
-
-    @property
-    def n_predictions(self) -> int:
-        """Return number of predictions."""
-        return self.dictionary.get("n_predictions", 1)
-
-    @property
-    def batch_size(self) -> int:
-        """Return batch size."""
-        return self.dictionary.get("batch_size", 32)
-
-    @property
-    def validation_split(self) -> float:
-        """Return validation split."""
-        return self.dictionary.get("validation_split", 0.2)
-
-    @property
-    def activation(self) -> str:
-        """Return activation function."""
-        return self.dictionary.get("activation", "tanh")
-
-    @property
-    def bias(self) -> bool:
-        """Return bias."""
-        return self.dictionary.get("bias", True)
-
-    @property
-    def cuda_id(self) -> int:
-        """Return CUDA ID."""
-        return self.dictionary.get("cuda_id", 0)
-
-    @property
-    def kernel_initializer(self) -> str:
-        """Return kernel initializer."""
-        return self.dictionary.get("kernel_initializer", "glorot_uniform")
-
-    @property
-    def recurrent_initializer(self) -> str:
-        """Return recurrent initializer."""
-        return self.dictionary.get("recurrent_initializer", "orthogonal")
-
-    @property
-    def net_gain_and_bias(self) -> bool:
-        """Return net gain and bias."""
-        return self.dictionary.get("net_gain_and_bias", False)
-
-    @property
-    def patience(self) -> int:
-        """Return patience."""
-        return self.dictionary.get("patience", 10)
-
-    @property
-    def epochs(self) -> int:
-        """Return number of epochs."""
-        return self.dictionary.get("epochs", 100)
-
-    @property
-    def window_size(self) -> int:
-        """Return window size."""
-        return self.dictionary.get("window_size", 10)
-
-    @property
-    def error_buffer(self) -> int:
-        """Return error buffer."""
-        return self.dictionary.get("error_buffer", 100)
-
-    @property
-    def smoothing_perc(self) -> int:
-        """Return smoothing percentage."""
-        return self.dictionary.get("smoothing_perc", 50)
-
-    @property
-    def smoothing(self) -> int:
-        """Return smoothing."""
-        return self.dictionary.get("smoothing", 10)
-
-    @property
-    def learning_rate(self) -> float:
-        """Return learning rate."""
-        return self.dictionary.get("learning_rate", 0.001)
-
-    @learning_rate.setter
-    def learning_rate(self, value: float):
-        """Set learning rate."""
-        self.dictionary["learning_rate"] = value
-
-    @property
-    def model_architecture(self) -> str:
-        """Return model architecture."""
-        return self.dictionary.get("model_architecture", "ESN")
-
-    @model_architecture.setter
-    def model_architecture(self, value: str):
-        """Set model architecture."""
-        self.dictionary["model_architecture"] = value
-
-    @property
-    def l2(self) -> List[float]:
-        """Return L2 regularization."""
-        return self.dictionary.get("l2", [0.0])
-
-    @l2.setter
-    def l2(self, value: List[float]):
-        """Set L2 regularization."""
-        self.dictionary["l2"] = value
-
-    @property
-    def layers(self) -> List[int]:
-        """Return number of layers."""
-        return self.dictionary.get("layers", [1])
-
-    @layers.setter
-    def layers(self, value: List[int]):
-        """Set number of layers."""
-        self.dictionary["layers"] = value
-
-    @property
-    def leakage(self) -> float:
-        """Return leakage."""
-        return self.dictionary.get("leakage", 1.0)
-
-    @leakage.setter
-    def leakage(self, value: float):
-        """Set leakage."""
-        self.dictionary["leakage"] = value
-
-    @property
-    def input_scaling(self) -> float:
-        """Return input scaling."""
-        return self.dictionary.get("input_scaling", 1.0)
-
-    @input_scaling.setter
-    def input_scaling(self, value: float):
-        """Set input scaling."""
-        self.dictionary["input_scaling"] = value
-
-    @property
-    def rho(self) -> float:
-        """Return spectral radius."""
-        return self.dictionary.get("rho", 0.9)
-
-    @rho.setter
-    def rho(self, value: float):
-        """Set spectral radius."""
-        self.dictionary["rho"] = value
-
-    @property
-    def lr(self) -> float:
-        """Return learning rate."""
-        return self.dictionary.get("lr", 0.001)
-
-    @lr.setter
-    def lr(self, value: float):
-        """Set learning rate."""
-        self.dictionary["lr"] = value
-
-    @property
-    def weight_decay(self) -> float:
-        """Return weight decay."""
-        return self.dictionary.get("weight_decay", 0.0)
-
-    @weight_decay.setter
-    def weight_decay(self, value: float):
-        """Set weight decay."""
-        self.dictionary["weight_decay"] = value
-
-    @property
-    def dropout(self) -> float:
-        """Return dropout."""
-        return self.dictionary.get("dropout", 0.0)
-
-    @dropout.setter
-    def dropout(self, value: float):
-        """Set dropout."""
-        self.dictionary["dropout"] = value
+        # The value of l2 regularization
+        self.p: float = (
+            0.13  # minimum percent decrease between max errors in anomalous sequences (used for pruning)
+        )
 
 
 def make_dirs(_id: str):
     """Create directories for storing data in repo (using datetime ID) if they don't
     already exist."""
-
-    config = Config("config.yaml")
-
-    if not config.train or not config.predict:
-        if not os.path.isdir(f"data/{config.use_id}"):
-            raise ValueError(
-                f"Run ID {_id} is not valid. "
-                "If loading prior models or predictions, must provide valid ID."
-            )
 
     paths: List[str] = [
         "data",

@@ -3,7 +3,6 @@ ESN."""
 
 import logging
 import os
-import sys
 
 import numpy as np
 import torch
@@ -13,12 +12,10 @@ from torch.utils.data import (
     TensorDataset,
 )
 
-sys.path.append("spaceai/spaice-autocl-main/telemanom")
-
 logger = logging.getLogger("telemanom")
 
 
-class Channel:  # pylint: disable=too-many-instance-attributes
+class Channel:
     """Load and shape channel values (predicted and actual) for ingestion into LSTM or
     ESN."""
 

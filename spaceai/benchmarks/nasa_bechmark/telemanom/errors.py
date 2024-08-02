@@ -19,7 +19,7 @@ from telemanom.helpers import Config
 logger = logging.getLogger("telemanom")
 
 
-class Errors:  # pylint: disable=too-many-instance-attributes
+class Errors:
     """Batch processing of errors between actual and predicted values for a channel."""
 
     def __init__(self, channel: Channel, config: Config, run_id: str, result_path: str):
@@ -176,10 +176,10 @@ class Errors:  # pylint: disable=too-many-instance-attributes
             self.merge_scores()
 
 
-class ErrorWindow:  # pylint: disable=too-many-instance-attributes
+class ErrorWindow:
     """Data and calculations for a specific window of prediction errors."""
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(
         self, channel, config, start_idx: int, end_idx: int, errors, window_num: int
     ):
         """Data and calculations for a specific window of prediction errors.
@@ -515,13 +515,13 @@ class ErrorWindow:  # pylint: disable=too-many-instance-attributes
                 "score": 0,
             }
 
-            score: float = max(  # pylint: disable=consider-using-generator
+            score: float = max(
                 [
                     abs(self.e_s[i] - self.epsilon) / (self.mean_e_s + self.sd_e_s)
                     for i in range(e_seq[0], e_seq[-1] + 1)
                 ]
             )
-            inv_score: float = max(  # pylint: disable=consider-using-generator
+            inv_score: float = max(
                 [
                     abs(self.e_s_inv[i] - self.epsilon_inv)
                     / (self.mean_e_s + self.sd_e_s)

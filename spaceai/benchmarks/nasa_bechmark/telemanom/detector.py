@@ -3,9 +3,7 @@
 import ast
 import csv
 import glob
-import logging
 import os
-import sys
 import time
 from datetime import datetime as dt
 from typing import (
@@ -20,24 +18,21 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_squared_error
 from telemanom import helpers
-
-sys.path.append("spaceai/spaice-autocl-main/telemanom")
-from telemanom.channel import Channel  # pylint: disable=wrong-import-position
-from telemanom.errors import Errors  # pylint: disable=wrong-import-position
-from telemanom.helpers import Config  # pylint: disable=wrong-import-position
-from telemanom.modeling import Model  # pylint: disable=wrong-import-position
+from telemanom.channel import Channel
+from telemanom.errors import Errors
+from telemanom.helpers import Config
+from telemanom.modeling import Model
 
 logger = helpers.setup_logging()
 
 
-class Detector:  # pylint: disable=too-many-instance-attributes
+class Detector:
     """Top-level class for running anomaly detection over a group of channels with."""
 
     def __init__(
         self,
         labels_path: str,
         result_path: str = "results/",
-        config_path: str = "config.yaml",
     ):
         """Top-level class for running anomaly detection over a group of channels with
         values stored in .npy files.
@@ -74,7 +69,7 @@ class Detector:  # pylint: disable=too-many-instance-attributes
         self.f1: float
         self.precision: float
         self.recall: float
-        self.config: Config = Config(config_path)
+        self.config: Config = Config()
         self.y_hat: Optional[np.ndarray] = None
         self.id: str = (
             self.config.model_architecture
@@ -83,18 +78,18 @@ class Detector:  # pylint: disable=too-many-instance-attributes
         )
         helpers.make_dirs(self.id)
 
-        # add logging FileHandler based on ID
-        hdlr: logging.FileHandler = logging.FileHandler(f"data/logs/{self.id}.log")
-        formatter: logging.Formatter = logging.Formatter(
-            "%(asctime)s %(levelname)s %(message)s"
-        )
-        hdlr.setFormatter(formatter)
-        logger.addHandler(hdlr)
+        # # add logging FileHandler based on ID
+        # hdlr: logging.FileHandler = logging.FileHandler(f"data/logs/{self.id}.log")
+        # formatter: logging.Formatter = logging.Formatter(
+        #     "%(asctime)s %(levelname)s %(message)s"
+        # )
+        # hdlr.setFormatter(formatter)
+        # logger.addHandler(hdlr)
         self.result_path: str = os.path.join(
             result_path, self.config.model_architecture
         )
         if self.labels_path:
-            self.chan_df = pd.read_csv(labels_path)
+            self.chan_df = pd.read_csv(self.labels_path)
         else:
             chan_ids = [x.split(".")[0] for x in os.listdir("./data/test/")]
             self.chan_df = pd.DataFrame({"chan_id": chan_ids})
@@ -134,10 +129,8 @@ class Detector:  # pylint: disable=too-many-instance-attributes
             true_indices_grouped: List[List[int]] = [
                 list(range(e[0], e[1] + 1)) for e in label_row["anomaly_sequences"]
             ]
-            true_indices_flat: set = (
-                set(  # pylint: disable=consider-using-set-comprehension
-                    [i for group in true_indices_grouped for i in group]
-                )
+            true_indices_flat: set = set(
+                [i for group in true_indices_grouped for i in group]
             )
             for e_seq in errors.E_seq:
                 i_anom_predicted: set = set(range(e_seq[0], e_seq[1] + 1))
@@ -222,7 +215,7 @@ class Detector:  # pylint: disable=too-many-instance-attributes
                 self.result_df["num_test_values"].sum(),
             )
 
-    def run_stage2_retrain(self) -> None:  # pylint: disable=too-many-locals
+    def run_stage2_retrain(self) -> None:
         """Run retraining on channels and log results."""
         result_stage1_csv_files: List[str] = glob.glob(
             os.path.join(self.result_path, "*.csv")
@@ -285,7 +278,7 @@ class Detector:  # pylint: disable=too-many-instance-attributes
                     csv_writer.writerow([self.id, "stage2_retrain", elapsed_time])
                     print(f"stage2_retrain took {elapsed_time:.2f} seconds")
 
-    def run_stage3_anomaly(  # pylint: disable=too-many-locals,too-many-statements
+    def run_stage3_anomaly(
         self,
     ) -> None:
         """Run anomaly detection on channels and log results."""
