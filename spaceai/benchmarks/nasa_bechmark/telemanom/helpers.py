@@ -1,107 +1,19 @@
 """Helper functions for clustering channels and setting up logging and directories."""
 
+import ast
 import logging
 import os
 import sys
-from typing import List
+from typing import (
+    Any,
+    Dict,
+    List,
+    Union,
+)
 
-
-class Config:
-    """Loads parameters from config.yaml into global object."""
-
-    def __init__(self):
-        self.model_architecture: str = "ESN"  # neural network architecture LSTM, ESN
-        self.num_sampler: int = 200
-        self.num_sampler2: int = 20
-        self.cpu: int = 1
-        self.cpu_adaptive: int = 1
-        self.train: bool = True  # train new or existing model for each channel
-        self.predict: bool = (
-            True  # generate new predicts or, if False, use predictions stored locally
-        )
-        self.use_id: int = 0
-        self.cuda_id: int = 0
-        self.batch_size: int = 70  # number of values to evaluate in each batch
-        self.window_size: int = (
-            30  # number of trailing batches to use in error calculation
-        )
-        self.header: list = [  # Columns headers for output file
-            "run_id",
-            "chan_id",
-            "spacecraft",
-            "num_anoms",
-            "anomaly_sequences",
-            "class",
-            "true_positives",
-            "false_positives",
-            "false_negatives",
-            "tp_sequences",
-            "fp_sequences",
-            "gaussian_p-value",
-            "num_values",
-            "normalized_error",
-            "eval_time",
-            "scores",
-        ]
-        self.smoothing_perc: float = (
-            0.05  # determines window size used in EWMA smoothing (percentage of total values for channel)
-        )
-        self.error_buffer: int = (
-            100  # number of values surrounding an error that are brought into the sequence (promotes grouping on nearby sequences
-        )
-
-        # model parameters
-        self.loss_metric: str = "mse"
-        self.optimizer: str = "adam"
-        self.learning_rate: float = 0.001
-        self.validation_split: float = 0.2
-        self.dropout: float = 0.3
-        self.lstm_batch_size: int = 64
-        self.esn_batch_number: int = 32
-        self.weight_decay: float = 0
-        self.epochs: int = (
-            15  # maximum number of epochs allowed (if early stopping criteria not met)
-        )
-        self.layers: list = [
-            80,
-            80,
-        ]  # network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
-        self.patience: int = (
-            5  # Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta
-        )
-        self.min_delta: float = 0.0003
-        self.l_s: int = (
-            250  # num previous timesteps provided to model to predict future values
-        )
-        self.n_predictions: int = 10  # number of steps ahead to predict
-
-        # Parameters only for ESN
-        self.activation: str = (
-            "tanh"  # Name of the activation function from `torch` (e.g. `torch.tanh`)
-        )
-        self.leakage: float = 1  # The value of the leaking parameter `alpha`
-        self.input_scaling: float = (
-            0.9  # The value for the desired scaling of the input (must be `<= 1`)
-        )
-        self.rho: float = (
-            0.99  # The desired spectral radius of the recurrent matrix (must be `< 1`)
-        )
-        self.kernel_initializer: str = (
-            "uniform"  # The kind of initialization of the input transformation. Default: `'uniform'`
-        )
-        self.recurrent_initializer: str = (
-            "normal"  # The kind of initialization of the recurrent matrix. Default: `'normal'`
-        )
-        self.net_gain_and_bias: bool = (
-            False  # If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Default: ``False``
-        )
-        self.bias: bool = False  # If ``False``, the layer does not use bias weights `b`
-        self.l2: list = [1e-10]  # The value of l2 regularization
-
-        # The value of l2 regularization
-        self.p: float = (
-            0.13  # minimum percent decrease between max errors in anomalous sequences (used for pruning)
-        )
+import numpy as np
+import pandas as pd
+from telemanom.errors import Errors
 
 
 def make_dirs(_id: str):
@@ -125,9 +37,6 @@ def make_dirs(_id: str):
 def setup_logging() -> logging.Logger:
     """Configure logging object to track parameter settings, training, and evaluation.
 
-    Args:
-        config(obj): Global object specifying system runtime params.
-
     Returns:
         logger (obj): Logging object
         _id (str): Unique identifier generated from datetime for storing data/models/results
@@ -141,3 +50,118 @@ def setup_logging() -> logging.Logger:
     logger.addHandler(stdout)
 
     return logger
+
+
+def log_final_stats(logger, labels_path, result_tracker, result_df):
+    """Log final stats at end of experiment."""
+    if labels_path:
+        logger.info("Final Totals:")
+        logger.info("-----------------")
+        logger.info("True Positives: %s", result_tracker["true_positives"])
+        logger.info("False Positives: %s", result_tracker["false_positives"])
+        logger.info("False Negatives: %s", result_tracker["false_negatives"])
+        try:
+            precision: float = float(result_tracker["true_positives"]) / (
+                float(
+                    result_tracker["true_positives"] + result_tracker["false_positives"]
+                )
+            )
+            recall: float = float(result_tracker["true_positives"]) / (
+                float(
+                    result_tracker["true_positives"] + result_tracker["false_negatives"]
+                )
+            )
+            f1: float = 2 * ((precision * recall) / (precision + recall))
+            logger.info("Precision: %.2f", precision)
+            logger.info("Recall: %.2f", recall)
+            logger.info("F1 Score: %.2f\n", f1)
+        except ZeroDivisionError:
+            logger.info("Precision: NaN")
+            logger.info("Recall: NaN")
+            logger.info("F1 Score: NaN\n")
+    else:
+        logger.info("Final Totals:")
+        logger.info("-----------------")
+        logger.info("Total channel sets evaluated: %s", len(result_df))
+        logger.info("Total anomalies found: %s", result_df["n_predicted_anoms"].sum())
+        logger.info(
+            "Avg normalized prediction error: %s",
+            result_df["normalized_pred_error"].mean(),
+        )
+        logger.info(
+            "Total number of values evaluated: %s\n",
+            result_df["num_test_values"].sum(),
+        )
+
+
+def evaluate_sequences(
+    errors: Errors,
+    label_row: pd.Series,
+    result_tracker: Dict[str, int],
+    logger: logging.Logger,
+) -> Dict[str, Union[int, List]]:
+    """Compare identified anomalous sequences with labeled anomalous sequences.
+
+    Args:
+        errors (Errors): Errors class object containing detected anomaly
+            sequences for a channel
+        label_row (pd.Series): Contains labels and true anomaly details
+            for a channel
+    Returns:
+        result_row (Dict[str, Union[int, List]]): anomaly detection accuracy and results
+    """
+    result_row: Dict[str, Any] = {
+        "false_positives": 0,
+        "false_negatives": 0,
+        "true_positives": 0,
+        "fp_sequences": [],
+        "tp_sequences": [],
+        "num_true_anoms": 0,
+    }
+
+    matched_true_seqs: List[int] = []
+    label_row["anomaly_sequences"] = ast.literal_eval(label_row["anomaly_sequences"])
+    result_row["num_true_anoms"] += len(label_row["anomaly_sequences"])
+    result_row["scores"] = errors.anom_scores
+    if len(errors.e_seq) == 0:
+        result_row["false_negatives"] = result_row["num_true_anoms"]
+    else:
+        true_indices_grouped: List[List[int]] = [
+            list(range(e[0], e[1] + 1)) for e in label_row["anomaly_sequences"]
+        ]
+        true_indices_flat: set = set(
+            [i for group in true_indices_grouped for i in group]
+        )
+        for e_seq in errors.e_seq:
+            i_anom_predicted: set = set(range(e_seq[0], e_seq[1] + 1))
+            matched_indices: List[int] = list(i_anom_predicted & true_indices_flat)
+            valid: bool = len(matched_indices) > 0
+            if valid:
+                result_row["tp_sequences"].append(e_seq)
+                true_seq_index: List[int] = [
+                    i
+                    for i in range(len(true_indices_grouped))
+                    if len(
+                        np.intersect1d(list(i_anom_predicted), true_indices_grouped[i])
+                    )
+                    > 0
+                ]
+                if not true_seq_index[0] in matched_true_seqs:
+                    matched_true_seqs.append(true_seq_index[0])
+                    result_row["true_positives"] += 1
+            else:
+                result_row["fp_sequences"].append([e_seq[0], e_seq[1]])
+                result_row["false_positives"] += 1
+        result_row["false_negatives"] = len(
+            np.delete(label_row["anomaly_sequences"], matched_true_seqs, axis=0)
+        )
+    logger.info(
+        "Channel Stats: TP: %s  FP: %s  FN: %s",
+        result_row["true_positives"],
+        result_row["false_positives"],
+        result_row["false_negatives"],
+    )
+    for key, _ in result_row.items():
+        if key in result_tracker:
+            result_tracker[key] += result_row[key]
+    return result_row

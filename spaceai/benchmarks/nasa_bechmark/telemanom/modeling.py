@@ -10,7 +10,7 @@ import torch
 from esn.model import reservoir as esn
 from esn.optimization import ridge_regression
 from telemanom.channel import Channel
-from telemanom.helpers import Config
+from telemanom.config import Config
 from torch import (
     nn,
     optim,

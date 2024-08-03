@@ -11,7 +11,6 @@ from typing import (
     Dict,
     List,
     Optional,
-    Union,
 )
 
 import numpy as np
@@ -20,7 +19,11 @@ from sklearn.metrics import mean_squared_error
 from telemanom import helpers
 from telemanom.channel import Channel
 from telemanom.errors import Errors
-from telemanom.helpers import Config
+from telemanom.config import Config
+from telemanom.helpers import (
+    evaluate_sequences,
+    log_final_stats,
+)
 from telemanom.modeling import Model
 
 logger = helpers.setup_logging()
@@ -91,124 +94,6 @@ class Detector:
             chan_ids = [x.split(".")[0] for x in os.listdir("./data/test/")]
             self.chan_df = pd.DataFrame({"chan_id": chan_ids})
         logger.info("%s channels found for processing.", len(self.chan_df))
-
-    def evaluate_sequences(
-        self, errors: Errors, label_row: pd.Series
-    ) -> Dict[str, Union[int, List]]:
-        """Compare identified anomalous sequences with labeled anomalous sequences.
-
-        Args:
-            errors (Errors): Errors class object containing detected anomaly
-                sequences for a channel
-            label_row (pd.Series): Contains labels and true anomaly details
-                for a channel
-        Returns:
-            result_row (Dict[str, Union[int, List]]): anomaly detection accuracy and results
-        """
-        result_row: Dict[str, Any] = {
-            "false_positives": 0,
-            "false_negatives": 0,
-            "true_positives": 0,
-            "fp_sequences": [],
-            "tp_sequences": [],
-            "num_true_anoms": 0,
-        }
-
-        matched_true_seqs: List[int] = []
-        label_row["anomaly_sequences"] = ast.literal_eval(
-            label_row["anomaly_sequences"]
-        )
-        result_row["num_true_anoms"] += len(label_row["anomaly_sequences"])
-        result_row["scores"] = errors.anom_scores
-        if len(errors.e_seq) == 0:
-            result_row["false_negatives"] = result_row["num_true_anoms"]
-        else:
-            true_indices_grouped: List[List[int]] = [
-                list(range(e[0], e[1] + 1)) for e in label_row["anomaly_sequences"]
-            ]
-            true_indices_flat: set = set(
-                [i for group in true_indices_grouped for i in group]
-            )
-            for e_seq in errors.e_seq:
-                i_anom_predicted: set = set(range(e_seq[0], e_seq[1] + 1))
-                matched_indices: List[int] = list(i_anom_predicted & true_indices_flat)
-                valid: bool = len(matched_indices) > 0
-                if valid:
-                    result_row["tp_sequences"].append(e_seq)
-                    true_seq_index: List[int] = [
-                        i
-                        for i in range(len(true_indices_grouped))
-                        if len(
-                            np.intersect1d(
-                                list(i_anom_predicted), true_indices_grouped[i]
-                            )
-                        )
-                        > 0
-                    ]
-                    if not true_seq_index[0] in matched_true_seqs:
-                        matched_true_seqs.append(true_seq_index[0])
-                        result_row["true_positives"] += 1
-                else:
-                    result_row["fp_sequences"].append([e_seq[0], e_seq[1]])
-                    result_row["false_positives"] += 1
-            result_row["false_negatives"] = len(
-                np.delete(label_row["anomaly_sequences"], matched_true_seqs, axis=0)
-            )
-        logger.info(
-            "Channel Stats: TP: %s  FP: %s  FN: %s",
-            result_row["true_positives"],
-            result_row["false_positives"],
-            result_row["false_negatives"],
-        )
-        for key, _ in result_row.items():
-            if key in self.result_tracker:
-                self.result_tracker[key] += result_row[key]
-        return result_row
-
-    def log_final_stats(self):
-        """Log final stats at end of experiment."""
-        if self.labels_path:
-            logger.info("Final Totals:")
-            logger.info("-----------------")
-            logger.info("True Positives: %s", self.result_tracker["true_positives"])
-            logger.info("False Positives: %s", self.result_tracker["false_positives"])
-            logger.info("False Negatives: %s", self.result_tracker["false_negatives"])
-            try:
-                precision: float = float(self.result_tracker["true_positives"]) / (
-                    float(
-                        self.result_tracker["true_positives"]
-                        + self.result_tracker["false_positives"]
-                    )
-                )
-                recall: float = float(self.result_tracker["true_positives"]) / (
-                    float(
-                        self.result_tracker["true_positives"]
-                        + self.result_tracker["false_negatives"]
-                    )
-                )
-                f1: float = 2 * ((precision * recall) / (precision + recall))
-                logger.info("Precision: %.2f", precision)
-                logger.info("Recall: %.2f", recall)
-                logger.info("F1 Score: %.2f\n", f1)
-            except ZeroDivisionError:
-                logger.info("Precision: NaN")
-                logger.info("Recall: NaN")
-                logger.info("F1 Score: NaN\n")
-        else:
-            logger.info("Final Totals:")
-            logger.info("-----------------")
-            logger.info("Total channel sets evaluated: %s", len(self.result_df))
-            logger.info(
-                "Total anomalies found: %s", self.result_df["n_predicted_anoms"].sum()
-            )
-            logger.info(
-                "Avg normalized prediction error: %s",
-                self.result_df["normalized_pred_error"].mean(),
-            )
-            logger.info(
-                "Total number of values evaluated: %s\n",
-                self.result_df["num_test_values"].sum(),
-            )
 
     def run_stage2_retrain(self) -> None:
         """Run retraining on channels and log results."""
@@ -346,7 +231,7 @@ class Detector:
                         if self.labels_path:
                             result_row = {
                                 **result_row,
-                                **self.evaluate_sequences(errors, row),
+                                **evaluate_sequences(errors, row),
                             }
                             result_row["spacecraft"] = row["spacecraft"]
                             result_row["anomaly_sequences"] = row["anomaly_sequences"]
@@ -395,7 +280,9 @@ class Detector:
                             index=False,
                         )
 
-                    self.log_final_stats()
+                    log_final_stats(
+                        logger, self.labels_path, self.result_tracker, self.result_df
+                    )
                     end_time: float = time.time()
                     elapsed_time: float = end_time - start_time
                     csv_writer.writerow([self.id, "stage3_anomaly", elapsed_time])

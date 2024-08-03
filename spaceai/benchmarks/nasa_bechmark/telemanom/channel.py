@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 import torch
-from telemanom.helpers import Config
+from telemanom.config import Config
 from torch.utils.data import (
     DataLoader,
     TensorDataset,

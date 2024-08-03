@@ -14,7 +14,7 @@ import more_itertools as mit
 import numpy as np
 import pandas as pd
 from telemanom.channel import Channel
-from telemanom.helpers import Config
+from telemanom.config import Config
 
 logger = logging.getLogger("telemanom")
 
