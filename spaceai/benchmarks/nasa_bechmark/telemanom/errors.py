@@ -53,7 +53,7 @@ class Errors:
             / self.config.batch_size
         )
         self.i_anom: np.ndarray = np.array([])
-        self.E_seq: List[Tuple[int, int]] = []  # pylint: disable=invalid-name
+        self.e_seq: List[Tuple[int, int]] = []
         self.anom_scores: List[dict] = []
         self.run_id: str = run_id
         self.result_path: str = result_path
@@ -163,15 +163,15 @@ class Errors:
             groups: List[List[int]] = [
                 list(group) for group in mit.consecutive_groups(self.i_anom)
             ]
-            self.E_seq: List[Tuple[int, int]] = [
+            self.e_seq: List[Tuple[int, int]] = [
                 (int(g[0]), int(g[-1])) for g in groups if not g[0] == g[-1]
             ]
             # additional shift is applied to indices so that they represent the
             # position in the original data array, obtained from the .npy files,
             # and not the position on y_test (See PR #27).
-            self.E_seq = [
+            self.e_seq = [
                 (e_seq[0] + self.config.l_s, e_seq[1] + self.config.l_s)
-                for e_seq in self.E_seq
+                for e_seq in self.e_seq
             ]
             self.merge_scores()
 
@@ -239,10 +239,10 @@ class ErrorWindow:
         """
 
         self.i_anom: np.ndarray = np.array([])
-        self.E_seq: List[Tuple[int, int]] = []  # pylint: disable=invalid-name
+        self.e_seq: List[Tuple[int, int]] = []
         self.non_anom_max: float = -1000000
         self.i_anom_inv: np.ndarray = np.array([])
-        self.E_seq_inv: List[Tuple[int, int]] = []  # pylint: disable=invalid-name
+        self.e_seq_inv: List[Tuple[int, int]] = []
         self.non_anom_max_inv: float = -1000000
 
         self.config = config
@@ -323,7 +323,7 @@ class ErrorWindow:
                 groups: List[List[int]] = [
                     list(group) for group in mit.consecutive_groups(i_anom)
                 ]
-                E_seq: List[Tuple[int, int]] = [  # pylint: disable=invalid-name
+                e_seq: List[Tuple[int, int]] = [
                     (g[0], g[-1]) for g in groups if not g[0] == g[-1]
                 ]
 
@@ -334,13 +334,13 @@ class ErrorWindow:
                     (self.sd_e_s - np.std(pruned_e_s)) / self.sd_e_s
                 )
                 score: float = (mean_perc_decrease + sd_perc_decrease) / (
-                    len(E_seq) ** 2 + len(i_anom)
+                    len(e_seq) ** 2 + len(i_anom)
                 )
 
                 # sanity checks / guardrails
                 if (
                     score >= max_score
-                    and len(E_seq) <= 5
+                    and len(e_seq) <= 5
                     and len(i_anom) < (len(e_s) * 0.5)
                 ):
                     max_score = score
@@ -416,17 +416,17 @@ class ErrorWindow:
         groups: List[List[int]] = [
             list(group) for group in mit.consecutive_groups(i_anom)
         ]
-        E_seq: List[Tuple[int, int]] = [  # pylint: disable=invalid-name
+        e_seq: List[Tuple[int, int]] = [
             (g[0], g[-1]) for g in groups if not g[0] == g[-1]
         ]
 
         if inverse:
             self.i_anom_inv = i_anom
-            self.E_seq_inv = E_seq
+            self.e_seq_inv = e_seq
             self.non_anom_max_inv = non_anom_max
         else:
             self.i_anom = i_anom
-            self.E_seq = E_seq
+            self.e_seq = e_seq
             self.non_anom_max = non_anom_max
 
     def prune_anoms(self, inverse: bool = False) -> None:
@@ -437,34 +437,28 @@ class ErrorWindow:
             inverse (bool): If true, epsilon is calculated for inverted errors
         """
 
-        E_seq: Union[  # pylint: disable=invalid-name
-            List[Tuple[int, int]], np.ndarray
-        ] = (self.E_seq if not inverse else self.E_seq_inv)
+        e_seq: Union[List[Tuple[int, int]], np.ndarray] = (
+            self.e_seq if not inverse else self.e_seq_inv
+        )
         e_s: np.ndarray = self.e_s if not inverse else self.e_s_inv
         non_anom_max: float = (
             self.non_anom_max if not inverse else self.non_anom_max_inv
         )
 
-        if len(E_seq) == 0:
+        if len(e_seq) == 0:
             return
 
-        E_seq_max: np.ndarray = np.array(  # pylint: disable=invalid-name
-            [max(e_s[e[0] : e[1] + 1]) for e in E_seq]
-        )
-        E_seq_max_sorted: np.ndarray = np.sort(  # pylint: disable=invalid-name
-            E_seq_max
-        )[::-1]
-        E_seq_max_sorted = np.append(  # pylint: disable=invalid-name
-            E_seq_max_sorted, [non_anom_max]
-        )
+        e_seq_max: np.ndarray = np.array([max(e_s[e[0] : e[1] + 1]) for e in e_seq])
+        e_seq_max_sorted: np.ndarray = np.sort(e_seq_max)[::-1]
+        e_seq_max_sorted = np.append(e_seq_max_sorted, [non_anom_max])
 
         i_to_remove: np.ndarray = np.array([])
-        for i in range(0, len(E_seq_max_sorted) - 1):
-            if (E_seq_max_sorted[i] - E_seq_max_sorted[i + 1]) / E_seq_max_sorted[
+        for i in range(0, len(e_seq_max_sorted) - 1):
+            if (e_seq_max_sorted[i] - e_seq_max_sorted[i + 1]) / e_seq_max_sorted[
                 i
             ] < self.config.p:
                 i_to_remove = np.append(
-                    i_to_remove, np.argwhere(E_seq_max == E_seq_max_sorted[i])
+                    i_to_remove, np.argwhere(e_seq_max == e_seq_max_sorted[i])
                 )
             else:
                 i_to_remove = np.array([])
@@ -472,19 +466,17 @@ class ErrorWindow:
 
         i_to_remove = np.array(i_to_remove, dtype=int)
         if len(i_to_remove) > 0:
-            E_seq = np.delete(  # pylint: disable=invalid-name
-                E_seq, i_to_remove, axis=0
-            )
+            e_seq = np.delete(e_seq, i_to_remove, axis=0)
 
-        if len(E_seq) == 0 and inverse:
+        if len(e_seq) == 0 and inverse:
             self.i_anom_inv = np.array([])
             return
-        if len(E_seq) == 0 and not inverse:
+        if len(e_seq) == 0 and not inverse:
             self.i_anom = np.array([])
             return
 
         indices_to_keep: np.ndarray = np.concatenate(
-            [range(e_seq[0], e_seq[-1] + 1) for e_seq in E_seq]
+            [range(e_seq[0], e_seq[-1] + 1) for e_seq in e_seq]
         )
 
         if not inverse:

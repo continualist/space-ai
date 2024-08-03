@@ -43,11 +43,11 @@ class Channel:
 
         self.id: str = chan_id
         self.config: Config = config
-        self.X_train: np.ndarray  # pylint: disable=invalid-name
+        self.x_train: np.ndarray
         self.y_train: np.ndarray
-        self.X_valid: np.ndarray  # pylint: disable=invalid-name
+        self.x_valid: np.ndarray
         self.y_valid: np.ndarray
-        self.X_test: np.ndarray  # pylint: disable=invalid-name
+        self.x_test: np.ndarray
         self.y_test: np.ndarray
         self.y_hat: np.ndarray
         self.train: np.ndarray
@@ -77,7 +77,7 @@ class Channel:
 
         if train:
             np.random.shuffle(data)
-            self.X_train = data[:, : -self.config.n_predictions, :]
+            self.x_train = data[:, : -self.config.n_predictions, :]
             self.y_train = data[
                 :, -self.config.n_predictions :, 0
             ]  # telemetry value is at position 0
@@ -85,13 +85,13 @@ class Channel:
             if self.train_with_val:
                 # Split the dataset into training and validation sets
                 # based on the validation_split ratio
-                valid_size: int = int(len(self.X_train) * self.config.validation_split)
+                valid_size: int = int(len(self.x_train) * self.config.validation_split)
                 train_dataset: TensorDataset = TensorDataset(
-                    torch.Tensor(self.X_train[valid_size:]),
+                    torch.Tensor(self.x_train[valid_size:]),
                     torch.Tensor(self.y_train[valid_size:]),
                 )
                 valid_dataset: TensorDataset = TensorDataset(
-                    torch.Tensor(self.X_train[:valid_size]),
+                    torch.Tensor(self.x_train[:valid_size]),
                     torch.Tensor(self.y_train[:valid_size]),
                 )
 
@@ -101,7 +101,7 @@ class Channel:
                 )
             else:
                 train_dataset = TensorDataset(
-                    torch.Tensor(self.X_train), torch.Tensor(self.y_train)
+                    torch.Tensor(self.x_train), torch.Tensor(self.y_train)
                 )
 
             # Create DataLoaders for training sets
@@ -110,13 +110,13 @@ class Channel:
             )
 
         else:
-            self.X_test = data[:, : -self.config.n_predictions, :]
+            self.x_test = data[:, : -self.config.n_predictions, :]
             self.y_test = data[
                 :, -self.config.n_predictions :, 0
             ]  # telemetry value is at position 0
 
             test_dataset: TensorDataset = TensorDataset(
-                torch.Tensor(self.X_test), torch.Tensor(self.y_test)
+                torch.Tensor(self.x_test), torch.Tensor(self.y_test)
             )
             self.test_loader = DataLoader(
                 test_dataset, batch_size=self.config.batch_size, shuffle=False

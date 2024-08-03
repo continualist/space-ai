@@ -22,7 +22,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
 logger = logging.getLogger("telemanom")
 
 
-def ESN(reserviors: List[esn.Reservoir]):  # pylint: disable=invalid-name
+def esn_model(reserviors: List[esn.Reservoir]):
     """Echo State Network model for predicting time series data."""
     return lambda x: functools.reduce(lambda res, f: f(res), reserviors, x)[:, -1:, :]
 
@@ -86,7 +86,7 @@ class Model:
         self.run_id: str = run_id
         self.y_hat: np.ndarray = np.array([])
         self.model: nn.Module
-        self.input_size: int = channel.X_train.shape[2]
+        self.input_size: int = channel.x_train.shape[2]
         self.device: torch.device = (
             torch.device(f"cuda:{config.cuda_id}")
             if torch.cuda.is_available() and config.cuda_id is not None
@@ -212,23 +212,21 @@ class Model:
                 )
 
             if channel.train_with_val:
-                self.W_readout, best_mse = (  # pylint: disable=invalid-name
-                    ridge_regression.fit_and_validate_readout(
-                        channel.train_loader,
-                        channel.valid_loader,
-                        self.config.l2,
-                        mse,
-                        "min",
-                        None,
-                        ESN(self.reserviors),
-                        str(self.device),
-                    )
+                self.w_readout, best_mse = ridge_regression.fit_and_validate_readout(
+                    channel.train_loader,
+                    channel.valid_loader,
+                    self.config.l2,
+                    mse,
+                    "min",
+                    None,
+                    esn_model(self.reserviors),
+                    str(self.device),
                 )
                 return {"MSE": best_mse}
 
-            self.W_readout = ridge_regression.fit_readout(
+            self.w_readout = ridge_regression.fit_readout(
                 channel.train_loader,
-                ESN(self.reserviors),
+                esn_model(self.reserviors),
                 self.config.l2,
                 None,
                 str(self.device),
@@ -287,26 +285,24 @@ class Model:
 
         # predict each batch
         for (
-            X_test_batch,  # pylint: disable=invalid-name
+            x_test_batch,
             y_hat_batch,
         ) in channel.test_loader:
-            X_test_batch, y_hat_batch = X_test_batch.to(  # pylint: disable=invalid-name
+            x_test_batch, y_hat_batch = x_test_batch.to(self.device), y_hat_batch.to(
                 self.device
-            ), y_hat_batch.to(self.device)
+            )
             if self.config.model_architecture == "LSTM":
-                y_hat_batch = self.model(X_test_batch).detach().cpu().numpy()
+                y_hat_batch = self.model(x_test_batch).detach().cpu().numpy()
             else:
-                all_W: List[torch.Tensor] = [  # pylint: disable=invalid-name
-                    w.to(self.device) for w in self.W_readout
-                ]
+                all_w: List[torch.Tensor] = [w.to(self.device) for w in self.w_readout]
                 # Processing x
-                x: torch.Tensor = ESN(self.reserviors)(X_test_batch)
+                x: torch.Tensor = esn_model(self.reserviors)(x_test_batch)
                 size_x: torch.Size = x.size()
                 if len(size_x) > 2:
                     x = x.reshape(size_x[0], -1)
 
-                for _, W in enumerate(all_W):  # pylint: disable=invalid-name
-                    y_hat_batch = torch.matmul(x.to(W), W.t()).cpu()
+                for _, w in enumerate(all_w):
+                    y_hat_batch = torch.matmul(x.to(w), w.t()).cpu()
 
             self.aggregate_predictions(y_hat_batch.numpy(), "mean")
         self.y_hat = np.reshape(self.y_hat, (self.y_hat.size,))

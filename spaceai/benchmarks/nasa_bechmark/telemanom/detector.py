@@ -123,7 +123,7 @@ class Detector:
         )
         result_row["num_true_anoms"] += len(label_row["anomaly_sequences"])
         result_row["scores"] = errors.anom_scores
-        if len(errors.E_seq) == 0:
+        if len(errors.e_seq) == 0:
             result_row["false_negatives"] = result_row["num_true_anoms"]
         else:
             true_indices_grouped: List[List[int]] = [
@@ -132,7 +132,7 @@ class Detector:
             true_indices_flat: set = set(
                 [i for group in true_indices_grouped for i in group]
             )
-            for e_seq in errors.E_seq:
+            for e_seq in errors.e_seq:
                 i_anom_predicted: set = set(range(e_seq[0], e_seq[1] + 1))
                 matched_indices: List[int] = list(i_anom_predicted & true_indices_flat)
                 valid: bool = len(matched_indices) > 0
@@ -339,9 +339,9 @@ class Detector:
                         result_row: Dict[str, Any] = {
                             "run_id": self.id,
                             "chan_id": row["chan_id"],
-                            "num_train_values": len(channel.X_train),
-                            "num_test_values": len(channel.X_test),
-                            "n_predicted_anoms": len(errors.E_seq),
+                            "num_train_values": len(channel.x_train),
+                            "num_test_values": len(channel.x_test),
+                            "n_predicted_anoms": len(errors.e_seq),
                             "normalized_pred_error": errors.normalized,
                             "anom_scores": errors.anom_scores,
                             "test_mse": mse,
@@ -371,7 +371,7 @@ class Detector:
                             )
 
                         else:
-                            result_row["anomaly_sequences"] = errors.E_seq
+                            result_row["anomaly_sequences"] = errors.e_seq
                             self.results.append(result_row)
 
                             logger.info(
