@@ -231,7 +231,9 @@ class Detector:
                         if self.labels_path:
                             result_row = {
                                 **result_row,
-                                **evaluate_sequences(errors, row),
+                                **evaluate_sequences(
+                                    errors, row, self.result_tracker, logger
+                                ),
                             }
                             result_row["spacecraft"] = row["spacecraft"]
                             result_row["anomaly_sequences"] = row["anomaly_sequences"]
