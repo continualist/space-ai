@@ -66,9 +66,6 @@ class Detector:
             "false_positives": 0,
             "false_negatives": 0,
         }
-        self.f1: float
-        self.precision: float
-        self.recall: float
         self.config: Config = Config()
         self.y_hat: Optional[np.ndarray] = None
         self.id: str = (
@@ -177,24 +174,22 @@ class Detector:
             logger.info("False Positives: %s", self.result_tracker["false_positives"])
             logger.info("False Negatives: %s", self.result_tracker["false_negatives"])
             try:
-                self.precision = float(self.result_tracker["true_positives"]) / (
+                precision: float = float(self.result_tracker["true_positives"]) / (
                     float(
                         self.result_tracker["true_positives"]
                         + self.result_tracker["false_positives"]
                     )
                 )
-                self.recall = float(self.result_tracker["true_positives"]) / (
+                recall: float = float(self.result_tracker["true_positives"]) / (
                     float(
                         self.result_tracker["true_positives"]
                         + self.result_tracker["false_negatives"]
                     )
                 )
-                self.f1 = 2 * (
-                    (self.precision * self.recall) / (self.precision + self.recall)
-                )
-                logger.info("Precision: %.2f", self.precision)
-                logger.info("Recall: %.2f", self.recall)
-                logger.info("F1 Score: %.2f\n", self.f1)
+                f1: float = 2 * ((precision * recall) / (precision + recall))
+                logger.info("Precision: %.2f", precision)
+                logger.info("Recall: %.2f", recall)
+                logger.info("F1 Score: %.2f\n", f1)
             except ZeroDivisionError:
                 logger.info("Precision: NaN")
                 logger.info("Recall: NaN")
