@@ -272,6 +272,7 @@ class Detector:
                             self.config.dropout = best_hps["dropout"]
 
                         model = Model(self.config, row["run_id"], channel)
+                        model.train_new(channel)
                         channel = model.batch_predict(self.final_result_path, channel)
                     end_time: float = time.time()
                     elapsed_time: float = end_time - start_time

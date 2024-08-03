@@ -109,8 +109,6 @@ class Model:
             )
             self.valid_loss: float
 
-        self.train_new(channel)
-
     def train_new(self, channel: Channel):
         """Train LSTM model according to specifications in config.yaml.
 
