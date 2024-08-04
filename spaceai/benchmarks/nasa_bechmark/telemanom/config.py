@@ -39,10 +39,12 @@ class Config:
             "scores",
         ]
         self.smoothing_perc: float = (
-            0.05  # determines window size used in EWMA smoothing (percentage of total values for channel)
+            0.05  # determines window size used in EWMA smoothing
+            # (percentage of total values for channel)
         )
         self.error_buffer: int = (
-            100  # number of values surrounding an error that are brought into the sequence (promotes grouping on nearby sequences
+            100  # number of values surrounding an error that are brought into the sequence
+            # (promotes grouping on nearby sequences
         )
 
         # model parameters
@@ -55,14 +57,17 @@ class Config:
         self.esn_batch_number: int = 32
         self.weight_decay: float = 0
         self.epochs: int = (
-            15  # maximum number of epochs allowed (if early stopping criteria not met)
+            15  # maximum number of epochs allowed
+            # (if early stopping criteria not met)
         )
         self.layers: list = [
             80,
             80,
-        ]  # network architecture [<neurons in hidden layer>, <neurons in hidden layer>]
+        ]  # network architecture
+        # [<neurons in hidden layer>, <neurons in hidden layer>]
         self.patience: int = (
-            5  # Number of consequetive training iterations to allow without decreasing the val_loss by at least min_delta
+            5  # Number of consequetive training iterations to allow without
+            # decreasing the val_loss by at least min_delta
         )
         self.min_delta: float = 0.0003
         self.l_s: int = (
@@ -82,18 +87,21 @@ class Config:
             0.99  # The desired spectral radius of the recurrent matrix (must be `< 1`)
         )
         self.kernel_initializer: str = (
-            "uniform"  # The kind of initialization of the input transformation. Default: `'uniform'`
+            "uniform"  # The kind of initialization of the input transformation.
+            # Default: `'uniform'`
         )
         self.recurrent_initializer: str = (
             "normal"  # The kind of initialization of the recurrent matrix. Default: `'normal'`
         )
         self.net_gain_and_bias: bool = (
-            False  # If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Default: ``False``
+            False  # If ``True``, the network uses additional ``g`` (gain) and
+            # ``b`` (bias) parameters. Default: ``False``
         )
         self.bias: bool = False  # If ``False``, the layer does not use bias weights `b`
         self.l2: list = [1e-10]  # The value of l2 regularization
 
         # The value of l2 regularization
         self.p: float = (
-            0.13  # minimum percent decrease between max errors in anomalous sequences (used for pruning)
+            0.13  # minimum percent decrease between max errors in
+            # anomalous sequences (used for pruning)
         )

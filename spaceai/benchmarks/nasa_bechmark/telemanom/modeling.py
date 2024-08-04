@@ -3,7 +3,10 @@
 import functools
 import logging
 import os
-from typing import List
+from typing import (
+    List,
+    Tuple,
+)
 
 import numpy as np
 import torch
@@ -81,6 +84,10 @@ class Model:
     """Model class for training and predicting with LSTM or ESN models."""
 
     def __init__(self, config: Config, run_id: str, channel: Channel):
+        self.w_readout: (
+            Tuple[torch.Tensor, torch.Tensor] | torch.Tensor | List[torch.Tensor]
+        )
+        self.reserviors: List[esn.Reservoir] = []
         self.config: Config = config
         self.chan_id: str = channel.id
         self.run_id: str = run_id
@@ -178,7 +185,6 @@ class Model:
                 if channel.train_with_val:
                     self.valid_loss = best_val_loss
         else:
-            self.reserviors: List[esn.Reservoir] = []
             self.reserviors.append(
                 esn.Reservoir(
                     self.input_size,
