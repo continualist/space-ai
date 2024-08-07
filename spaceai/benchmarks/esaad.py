@@ -1,22 +1,15 @@
-# pylint: disable=missing-module-docstring
-import json
+# pylint: disable=missing-module-docstring, too-many-lines
 import os
 import sys
 import zipfile
 from dataclasses import dataclass
 from enum import Enum
-from glob import glob
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-)
 
 import numpy as np
 import pandas as pd
 import torch
 import wget
-from tqdm import tqdm
 
 from spaceai.benchmarks.benchmark import SpaceBenchmark
 
@@ -34,20 +27,25 @@ class AnnotationLabel(
 
 
 @dataclass
-class ESAADMission:
+class ESAADMission:  # pylint: disable=too-many-instance-attributes
     """ESAAD mission dataclass with metadata of a single mission."""
 
     index: int
     url_source: str
     dirname: str
-    test_data_split: str
-    train_data_split: str
+    train_test_split: str
     resampling_rule: pd.Timedelta
     monotonic_channel_range: tuple[int, int]
+    parameters: list[str]
+    telecommands: list[str]
 
     @property
     def inner_dirpath(self):  # pylint: disable=missing-function-docstring
         return os.path.join(self.dirname, self.dirname)
+
+    @property
+    def all_channels(self):  # pylint: disable=missing-function-docstring
+        return self.parameters + self.telecommands
 
 
 class ESAADMissions(Enum):
@@ -57,51 +55,22 @@ class ESAADMissions(Enum):
         index=1,
         url_source="https://zenodo.org/records/12528696/files/ESA-Mission1.zip?download=1",
         dirname="ESA-Mission1",
-        train_data_split="2007-01-01",
-        test_data_split="2007-01-01",
+        train_test_split="2007-01-01",
         resampling_rule=pd.Timedelta(seconds=30),
         monotonic_channel_range=(4, 11),
+        parameters=[f"channel_{i + 1}" for i in range(76)],
+        telecommands=[f"telecommand_{i + 1}" for i in range(698)],
     )
     MISSION_2: ESAADMission = ESAADMission(
         index=2,
         url_source="https://zenodo.org/records/12528696/files/ESA-Mission2.zip?download=1",
         dirname="ESA-Mission2",
-        train_data_split="2001-10-01",
-        test_data_split="2001-10-01",
+        train_test_split="2001-10-01",
         resampling_rule=pd.Timedelta(seconds=18),
         monotonic_channel_range=(29, 46),
+        parameters=[f"channel_{i + 1}" for i in range(100)],
+        telecommands=[f"telecommand_{i + 1}" for i in range(123)],
     )
-
-
-class Cache:  # pylint: disable=too-few-public-methods
-    """Cache class that stores a portion of loaded data in memory to retrieve them in a
-    faster way."""
-
-    def __init__(self, cache_size: int, load_value_function: Callable) -> None:
-        self.cache_size = cache_size
-        self.load_value_function = load_value_function
-        self.cached_keys: list = []
-        self.cache_dict: dict = {}
-
-    def load(self, key: str) -> Any:
-        """Load the value from the cache or load it from the function and store it in
-        the cache.
-
-        Args:
-            key (str): The key of the value to load.
-
-        Returns:
-            Any: The loaded value.
-        """
-        if key in self.cached_keys:
-            self.cached_keys.remove(key)
-        else:
-            self.cache_dict[key] = self.load_value_function(key)
-        self.cached_keys.append(key)
-        if len(self.cached_keys) > self.cache_size:
-            del self.cache_dict[self.cached_keys[0]]
-            self.cached_keys.pop(0)
-        return self.cache_dict[key]
 
 
 class ESAADBenchmark(
@@ -112,32 +81,29 @@ class ESAADBenchmark(
     def __init__(
         self,
         root: str,
-        mission_type: ESAADMission,
-        is_train: bool,
+        mission: ESAADMission,
+        channel_id: str,
+        train: bool,
         window_size: int = 250,
-        telecommands_min_priority: int = 3,
-        n_buckets: int = 1000,
-        cache_size: int = 10,
     ):  # pylint: disable=useless-parent-delegation, too-many-arguments
         """ESAADBenchmark class that preprocesses and loads ESAAD dataset for training
         and testing.
 
         Args:
             root (str): The root directory of the dataset.
-            mission_type (ESAADMission): The mission type of the dataset.
-            is_train (bool): The flag that indicates whether the dataset is for training or testing.
+            mission (ESAADMission): The mission type of the dataset.
+            channel_id (str): The channel ID to be used.
+            train (bool): The flag that indicates whether the dataset is for training or testing.
             window_size (int): The size of the window for each sample.
-            telecommands_min_priority (int): The minimum priority of telecommands to be included.
-            n_buckets (int): The number of buckets to divide the dataset.
-            cache_size (int): The size of the cache.
         """
         super().__init__()
         self.root = root
-        self.mission_type = mission_type
-        self.is_train = is_train
+        self.mission = mission
+        self.train = train
+        self.channel_id = channel_id
         self.window_size = window_size
-        self.telecommands_min_priority = telecommands_min_priority
-        self.n_buckets = n_buckets
+
+        assert channel_id in self.mission.all_channels, "Invalid channel ID"
 
         self.preprocessed_folder = Path(
             os.path.abspath(os.path.join(self.root, "preprocessed"))
@@ -145,42 +111,25 @@ class ESAADBenchmark(
         self.preprocessed_folder.mkdir(parents=True, exist_ok=True)
         self.preprocessed_mission_folder = (
             self.preprocessed_folder
-            / f'{mission_type.dirname}_{"train" if is_train else "test"}'
+            / f'{mission.dirname}_{"train" if train else "test"}'
         )
         self.preprocessed_mission_folder.mkdir(parents=True, exist_ok=True)
-        self.metadata_filepath = self.preprocessed_mission_folder / "metadata.json"
-        self.__download_dataset__(
-            os.path.join(root, mission_type.dirname), mission_type.url_source
+        self.preprocessed_channel_filepath = (
+            self.preprocessed_mission_folder / f"{channel_id}.csv"
         )
-        self.preprocess_dataset()
-        with open(self.metadata_filepath, encoding="utf-8") as metadata_file:
-            self.metadata = json.load(metadata_file)
-        self.cache = Cache(cache_size=cache_size, load_value_function=pd.read_csv)
+        self.__download_dataset__(
+            os.path.join(root, mission.dirname), mission.url_source
+        )
+        self.channel_data = self.__preprocess_channel_dataset__(channel_id)
 
     def __len__(self):
-        return int(np.floor(self.metadata["total_size"] / self.window_size))
+        return len(self.channel_data) // self.window_size
 
     def __getitem__(self, idx):
         start, end = idx * self.window_size, (idx + 1) * self.window_size
-        x_data, y_data = [], []
-        for bucket_metadata in self.metadata["buckets"]:
-            if start < bucket_metadata["end_index"]:
-                starti, endi = 0, None
-                if start > bucket_metadata["start_index"]:
-                    starti = start - bucket_metadata["start_index"]
-                if end < bucket_metadata["end_index"]:
-                    endi = -(bucket_metadata["end_index"] - end)
-                data = self.cache.load(bucket_metadata["filepath"]).drop(
-                    columns=["timestamp"]
-                )
-                x_data.append(data[self.metadata["x_columns"]].iloc[starti:endi].values)
-                y_data.append(data[self.metadata["y_columns"]].iloc[starti:endi].values)
-            if end < bucket_metadata["end_index"]:
-                break
-
-        x_data = torch.from_numpy(np.concatenate(x_data))
-        y_data = torch.from_numpy(np.concatenate(y_data))
-        return x_data, y_data
+        x_data = self.channel_data.iloc[start:end]["value"].values
+        y_data = self.channel_data.iloc[start:end]["label"].values
+        return torch.from_numpy(x_data), torch.from_numpy(y_data)
 
     def __download_dataset__(self, root: str, url: str):
         """Download the dataset from the given URL and extract it to the given
@@ -206,246 +155,193 @@ class ESAADBenchmark(
                 zip_ref.extractall(root)
             os.remove(zipfilepath)
 
-    def __filter_traintest_and_resampling_rule__(
-        self, param_df: pd.DataFrame
-    ) -> pd.DataFrame:
-        """Filter the dataframe by train-test split and resample it using zero order
-        hold.
+    def __filter_train_test__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+        """Filter the dataframe by train-test split.
 
         Args:
-            param_df (pd.DataFrame): The dataframe to filter and resample.
+            channel_df (pd.DataFrame): The dataframe to filter.
 
         Returns:
-            pd.DataFrame: The filtered and resampled dataframe.
+            pd.DataFrame: The filtered dataframe.
         """
-        resampling_rule = self.mission_type.resampling_rule
-        if self.is_train:
-            param_df = param_df[
-                param_df.index <= pd.to_datetime(self.mission_type.train_data_split)
-            ].copy()
+        if self.train:
+            mask = channel_df.index <= pd.to_datetime(self.mission.train_test_split)
         else:
-            param_df = param_df[
-                param_df.index > pd.to_datetime(self.mission_type.test_data_split)
-            ].copy()
+            mask = channel_df.index > pd.to_datetime(self.mission.train_test_split)
+        return channel_df[mask].copy()
 
-        if len(param_df) == 0:
-            return []
+    def __apply_esampling_rule__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+        """Resample the dataframe using zero order hold.
 
+        Args:
+            channel_df (pd.DataFrame): The dataframe to resample.
+
+        Returns:
+            pd.DataFrame: The resampled dataframe.
+        """
+        resampling_rule = self.mission.resampling_rule
         # Resample using zero order hold
-        first_index_resampled = pd.Timestamp(param_df.index[0]).floor(
+        first_index_resampled = pd.Timestamp(channel_df.index[0]).floor(
             freq=resampling_rule
         )
-        last_index_resampled = pd.Timestamp(param_df.index[-1]).ceil(
+        last_index_resampled = pd.Timestamp(channel_df.index[-1]).ceil(
             freq=resampling_rule
         )
         resampled_range = pd.date_range(
             first_index_resampled, last_index_resampled, freq=resampling_rule
         )
-        final_param_df = param_df.reindex(resampled_range, method="ffill")
+        final_param_df = channel_df.reindex(resampled_range, method="ffill")
         # Initialize the first sample
-        final_param_df.iloc[0] = param_df.iloc[0]
+        final_param_df.iloc[0] = channel_df.iloc[0]
         return final_param_df
 
-    def __encode_telecommands__(self, param_df: pd.DataFrame) -> pd.DataFrame:
+    def __encode_telecommands__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
         """Encode telecommands as 0-1 peaks ensuring that they are not removed after
         resampling.
 
         Args:
-            param_df (pd.DataFrame): The telecommands dataframe.
+            channel_df (pd.DataFrame): The telecommands dataframe.
 
         Returns:
             pd.DataFrame: The telecommands dataframe with encoded telecommands.
         """
-        resampling_rule = self.mission_type.resampling_rule
+        resampling_rule = self.mission.resampling_rule
         # Encode telecommands as 0-1 peaks ensuring that they are not removed after resampling
-        original_timestamps = param_df.index.copy()
+        original_timestamps = channel_df.index.copy()
         for timestamp in original_timestamps:
             timestamp_before = timestamp - resampling_rule
-            if len(param_df.loc[timestamp_before:timestamp]) == 1:
-                param_df.loc[timestamp_before] = 0
-                param_df = param_df.sort_index()
+            if len(channel_df.loc[timestamp_before:timestamp]) == 1:
+                channel_df.loc[timestamp_before] = 0
+                channel_df = channel_df.sort_index()
             timestamp_after = timestamp + resampling_rule
-            if len(param_df.loc[timestamp:timestamp_after]) == 1:
-                param_df.loc[timestamp_after] = 0
-                param_df = param_df.sort_index()
-        return param_df
+            if len(channel_df.loc[timestamp:timestamp_after]) == 1:
+                channel_df.loc[timestamp_after] = 0
+                channel_df = channel_df.sort_index()
+        return channel_df
 
-    def __find_full_time_range__(
-        self, params_dict: dict
-    ) -> tuple[pd.Timestamp, pd.Timestamp]:
-        """Find the full time range of the dataset.
+    def __load_parameter_dataset__(
+        self,
+        filepath: str,
+        channel_id: str,
+        labels_df: pd.DataFrame,
+        anomaly_types_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Load and preprocess the parameter dataset.
 
         Args:
-            params_dict (dict): The dictionary of dataframes.
+            filepath (str): The path to the parameter dataset.
+            channel_id (str): The channel ID.
+            labels_df (pd.DataFrame): The labels dataframe.
+            anomaly_types_df (pd.DataFrame): The anomaly types dataframe.
 
         Returns:
-            tuple[pd.Timestamp, pd.Timestamp]: The start and end time of the dataset.
+            pd.DataFrame: The preprocessed parameter dataset.
         """
-        # Find full dataset time range
-        start_time = []
-        end_time = []
-        for df in params_dict.values():
-            if len(df) == 0:
-                continue
-            start_time.append(df.index[0])
-            end_time.append(df.index[-1])
-        start_time = min(start_time)
-        end_time = max(end_time)
-        return start_time, end_time
+        channel_df = pd.read_pickle(filepath)
+        channel_df["label"] = np.uint8(0)
+        channel_df = channel_df.rename(columns={channel_id: "value"})
 
-    def preprocess_dataset(
+        # Take derivative of monotonic channels - part of preprocessing
+        min_ch, max_ch = self.mission.monotonic_channel_range
+        if min_ch <= int(channel_id.split("_")[1]) <= max_ch:
+            channel_df.value = np.diff(
+                channel_df.value, append=channel_df.value.iloc[-1]
+            )
+
+        # Change string values to categorical integers
+        if channel_df["value"].dtype == "O":
+            channel_df["value"] = pd.factorize(channel_df["value"])[0]
+
+        # Fill labels
+        for _, row in labels_df.iterrows():
+            if row["Channel"] == channel_id:
+                anomaly_type = anomaly_types_df.loc[
+                    anomaly_types_df["ID"] == row["ID"]
+                ]["Category"].values[0]
+                end_time = pd.Timestamp(row["EndTime"]).ceil(
+                    freq=self.mission.resampling_rule
+                )
+                if anomaly_type == "Anomaly":
+                    label_value = AnnotationLabel.ANOMALY.value
+                elif anomaly_type == "Rare Event":
+                    label_value = AnnotationLabel.RARE_EVENT.value
+                elif anomaly_type == "Communication Gap":
+                    label_value = AnnotationLabel.GAP.value
+                else:
+                    label_value = AnnotationLabel.INVALID.value
+                channel_df.loc[row["StartTime"] : end_time, "label"] = label_value
+        return channel_df
+
+    def __load_telecommand_dataset__(
+        self, filepath: str, channel_id: str
+    ) -> pd.DataFrame:
+        """Load and preprocess the telecommand dataset.
+
+        Args:
+            filepath (str): The path to the telecommand dataset.
+            channel_id (str): The channel ID.
+
+        Returns:
+            pd.DataFrame: The preprocessed telecommand dataset.
+        """
+        channel_df = pd.read_pickle(filepath)
+        channel_df["label"] = np.uint8(0)
+        channel_df = channel_df.rename(columns={channel_id: "value"})
+        channel_df.index = pd.to_datetime(channel_df.index)
+        channel_df = channel_df[~channel_df.index.duplicated()]
+        return self.__encode_telecommands__(channel_df)
+
+    def __preprocess_channel_dataset__(
         self,
-    ):  # pylint: disable=too-many-locals, too-many-branches, too-many-statements
-        """Preprocess the dataset by filtering, resampling, and saving it to the
-        preprocessed folder."""
-        resampling_rule = self.mission_type.resampling_rule
-        date_format_str = "%Y-%m-%d %H:%M:%S"
-        source_folder = os.path.join(self.root, self.mission_type.inner_dirpath)
+        channel_id: str,
+    ) -> pd.DataFrame:
+        """Preprocess the channel dataset by loading the raw channel dataset.
+
+        Args:
+            channel_id (str): The channel ID to preprocess.
+
+        Returns:
+            pd.DataFrame: The preprocessed channel dataset.
+        """
+        source_folder = os.path.join(self.root, self.mission.inner_dirpath)
 
         # Load dataframes from files of raw dataset
         labels_df = pd.read_csv(os.path.join(source_folder, "labels.csv"))
         for dcol in ["StartTime", "EndTime"]:
             labels_df[dcol] = pd.to_datetime(labels_df[dcol]).dt.tz_localize(None)
+
         anomaly_types_df = pd.read_csv(os.path.join(source_folder, "anomaly_types.csv"))
-        telecommands_df = pd.read_csv(os.path.join(source_folder, "telecommands.csv"))
 
-        extension = ".zip"
-        all_parameter_names = sorted(
-            [
-                os.path.basename(file)[: -len(extension)]
-                for file in glob(
-                    os.path.join(source_folder, "channels", f"*{extension}")
-                )
-            ]
-        )
-
-        # Filter telecommands by priority
-        telecommands_df = telecommands_df.loc[
-            telecommands_df["Priority"] >= self.telecommands_min_priority
-        ]
-        all_telecommands_names = sorted(telecommands_df.Telecommand.to_list())
-
-        # Initialize anomaly columns
-        is_anomaly_columns = [
-            f"is_anomaly_{param}"
-            for param in all_parameter_names + all_telecommands_names
-        ]
-
-        if not self.metadata_filepath.exists():
-            params_dict = {}
-
-            # Load and format parameters (channels)
-            for param in tqdm(all_parameter_names, desc="Preprocess channels"):
-                param_df = pd.read_pickle(
-                    os.path.join(source_folder, "channels", f"{param}{extension}")
-                )
-                param_df["label"] = np.uint8(0)
-                param_df = param_df.rename(columns={param: "value"})
-
-                # Take derivative of monotonic channels - part of preprocessing
-                min_ch, max_ch = self.mission_type.monotonic_channel_range
-                if min_ch <= int(param.split("_")[1]) <= max_ch:
-                    param_df.value = np.diff(
-                        param_df.value, append=param_df.value.iloc[-1]
-                    )
-
-                # Change string values to categorical integers
-                if param_df["value"].dtype == "O":
-                    param_df["value"] = pd.factorize(param_df["value"])[0]
-
-                # Fill labels
-                for _, row in labels_df.iterrows():
-                    if row["Channel"] == param:
-                        anomaly_type = anomaly_types_df.loc[
-                            anomaly_types_df["ID"] == row["ID"]
-                        ]["Category"].values[0]
-                        end_time = pd.Timestamp(row["EndTime"]).ceil(
-                            freq=resampling_rule
-                        )
-                        if anomaly_type == "Anomaly":
-                            label_value = AnnotationLabel.ANOMALY.value
-                        elif anomaly_type == "Rare Event":
-                            label_value = AnnotationLabel.RARE_EVENT.value
-                        elif anomaly_type == "Communication Gap":
-                            label_value = AnnotationLabel.GAP.value
-                        else:
-                            label_value = AnnotationLabel.INVALID.value
-                        param_df.loc[row["StartTime"] : end_time, "label"] = label_value
-
-                params_dict[param] = self.__filter_traintest_and_resampling_rule__(
-                    param_df
+        if not self.preprocessed_channel_filepath.exists():
+            # Load and format parameter (channel)
+            if channel_id in self.mission.parameters:
+                channel_df = self.__load_parameter_dataset__(
+                    os.path.join(source_folder, "channels", f"{channel_id}.zip"),
+                    channel_id=channel_id,
+                    labels_df=labels_df,
+                    anomaly_types_df=anomaly_types_df,
                 )
 
-            # Load and format telecommands
-            for param in tqdm(all_telecommands_names, desc="Preprocess telecommands"):
-                param_df = pd.read_pickle(
-                    os.path.join(source_folder, "telecommands", f"{param}{extension}")
-                )
-                param_df["label"] = np.uint8(0)
-                param_df = param_df.rename(columns={param: "value"})
-
-                param_df.index = pd.to_datetime(param_df.index)
-                param_df = param_df[~param_df.index.duplicated()]
-                param_df = self.__encode_telecommands__(param_df)
-
-                params_dict[param] = self.__filter_traintest_and_resampling_rule__(
-                    param_df
+            # Load and format telecommand
+            if channel_id in self.mission.telecommands:
+                channel_df = self.__load_telecommand_dataset__(
+                    os.path.join(source_folder, "telecommands", f"{channel_id}.zip"),
+                    channel_id=channel_id,
                 )
 
-            # Initialize final dataframe
-            start_time, end_time = self.__find_full_time_range__(params_dict)
-            all_params = list(params_dict.keys())
-            metadata = {
-                "buckets": [],
-                "start_time": start_time.strftime(date_format_str),
-                "end_time": end_time.strftime(date_format_str),
-                "total_size": 0,
-                "x_columns": all_params,
-                "y_columns": is_anomaly_columns,
-            }
-            full_index = pd.date_range(start_time, end_time, freq=resampling_rule)
-            data_df = pd.DataFrame(index=full_index)
+            channel_df = self.__filter_train_test__(channel_df)
+            if len(channel_df) == 0:
+                return []
+            channel_df = self.__apply_esampling_rule__(channel_df)
 
-            for param in tqdm(all_params, desc="Create total dataframe"):
-                df = params_dict.pop(param)
-                df = df.rename(columns={"value": param, "label": f"is_anomaly_{param}"})
-                if len(df) == 0:
-                    data_df[param] = np.uint8(0)
-                    data_df[f"is_anomaly_{param}"] = np.uint8(0)
-                    continue
-                data_df[df.columns] = df.reindex(data_df.index)
-                data_df[param] = data_df[param].astype(np.float64).ffill().bfill()
-                data_df[f"is_anomaly_{param}"] = (
-                    data_df[f"is_anomaly_{param}"].ffill().bfill().astype(np.uint8)
-                )
-
-            data_df["timestamp"] = data_df.index.strftime(date_format_str)
-            new_columns_order = [
-                "timestamp",
-                *all_parameter_names,
-                *all_telecommands_names,
-                *is_anomaly_columns,
-            ]
-            data_df = data_df[new_columns_order].reset_index(drop=True)
-
-            bucket_size = np.ceil(len(data_df) / self.n_buckets)
-            for n_bucket in tqdm(range(self.n_buckets), desc="Save buckets"):
-                df = data_df.loc[n_bucket * bucket_size : (n_bucket + 1) * bucket_size]
-                bucket_filepath = (
-                    self.preprocessed_mission_folder / f"data_{n_bucket}.csv"
-                )
-                metadata["buckets"].append(
-                    {
-                        "filepath": str(bucket_filepath),
-                        "size": len(df),
-                        "start_index": metadata["total_size"],
-                        "end_index": metadata["total_size"] + len(df),
-                    }
-                )
-                metadata["total_size"] += len(df)
-                df.to_csv(bucket_filepath, index=False, lineterminator="\n")
-            with open(self.metadata_filepath, "w", encoding="utf-8") as metadata_file:
-                json.dump(metadata, metadata_file)
+            channel_df["value"] = channel_df["value"].astype(np.float64).ffill().bfill()
+            channel_df["label"] = channel_df["label"].ffill().bfill().astype(np.uint8)
+            channel_df.to_csv(
+                self.preprocessed_channel_filepath, index=False, lineterminator="\n"
+            )
+            return channel_df
+        with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
+            return pd.read_csv(fp)
 
 
 if __name__ == "__main__":
@@ -453,17 +349,21 @@ if __name__ == "__main__":
     if not os.path.exists(ROOT):
         os.mkdir(ROOT)
 
-    datasets = [
-        ESAADBenchmark(
-            root=ROOT, mission_type=ESAADMissions.MISSION_1.value, is_train=True
-        ),
-    ]
-    """[ ESAADBenchmark(root=ROOT, mission_type=ESAADMissions.MISSION_1.value,
-    is_train=False), ESAADBenchmark( root=ROOT,
-    mission_type=ESAADMissions.MISSION_2.value, is_train=True), ESAADBenchmark(
-    root=ROOT, mission_type=ESAADMissions.MISSION_2.value, is_train=False) ]"""
-    for dataset in datasets:
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=False)
-        for i, (x, y) in enumerate(dataloader):
-            print(i, x.shape, y.shape)
-        break
+    for mission_metadata in [
+        ESAADMissions.MISSION_1.value,
+        ESAADMissions.MISSION_2.value,
+    ]:
+        for is_train in [True, False]:
+            dataset = ESAADBenchmark(
+                root=ROOT,
+                mission=mission_metadata,
+                channel_id="channel_12",
+                train=is_train,
+                window_size=250,
+            )
+            print(f"{dataset.mission.dirname} Dataset length:", len(dataset))
+            dataloader = torch.utils.data.DataLoader(
+                dataset, batch_size=64, shuffle=True
+            )
+            for i, (x, y) in enumerate(dataloader):
+                print(i, x.shape, y.shape)
