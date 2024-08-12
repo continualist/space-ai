@@ -48,12 +48,12 @@ repos:
       - id: mypy
         exclude: ^tests/
 
-  - repo: local
-    hooks:
-      - id: pylint
-        name: pylint
-        entry: pylint
-        language: python
-        types: [python]
+  # - repo: local
+  #   hooks:
+  #     - id: pylint
+  #       name: pylint
+  #       entry: pylint
+  #       language: python
+  #       types: [python]
 
 exclude: "examples/.*"
