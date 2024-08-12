@@ -1,46 +1,27 @@
 # SpaceAI
 Repository for providing off-the-shelf benchmarks for AI-based aerospace applications.
 
-## Codebase for NASA Benchmark
 
-Clone the repo:
+### Getting started
 
-```sh
-git clone https://github.com/continualist/space-ai.git
-```
-
-
-#### To run with local or virtual environment
-
-From ``` ./spaceai/examples ```, curl and unzip data:
+**Installing this codebase requires Python 3.10 or 3.11.**
+Run the following commands within your python virtual environment:
 
 ```sh
-curl -O https://s3-us-west-2.amazonaws.com/telemanom/data.zip && unzip data.zip && rm data.zip
-```
+pip install poetry
 
-Install dependencies:
-
-```sh
+git clone https://github.com/vdecaro/torch-rc.git
+cd torch-rc
 poetry install
-```
+cd ..
 
-Begin processing (from ``` ./spaceai/examples/ ```):
-
-```sh
-# rerun experiment labeled anomlies
-python nasa_run_exps.py -l ../benchmarks/nasa_bechmark/labeled_anomalies.csv
-
-# run without labeled anomalies
-python nasa_run_exps.py
+git clone https://github.com/continualist/space-ai.git
+cd space-ai
+poetry install
 ```
 
 # NASA Data (SMAP, MSL)
 
-## Using your own data
-
-Pre-split training and test sets must be placed in directories named `data/train/` and `data/test`. One `.npy` file should be generated for each channel or stream (for both train and test) with shape (`n_timesteps`, `n_inputs`). The filename should be a unique channel name or ID. The telemetry values being predicted in the test data *must* be the first feature in the input.
-
-For example, a channel `T-1` should have train/test sets named `T-1.npy` with shapes akin to `(4900,61)` and `(3925, 61)`, where the number of input dimensions are matching (`61`). The actual telemetry values should be along the first dimension `(4900,1)` and `(3925,1)`.
 
 ## Anomaly labels and metadata
 
@@ -73,8 +54,3 @@ To provide your own labels, use the `labeled_anomalies.csv` file as a template. 
 | Curiosity (MSL)	| 92.6%  	| 69.4%    | 0.69     |
 | Total 			| 87.5% 	| 80.0%	   | 0.71     |
 
-# Processing
-
-Each time the system is started a unique datetime ID (ex. `2018-05-17_16.28.00`) will be used to create the following
-- a **results** file (in `results/`) that extends `labeled_anomalies.csv` to include identified anomalous sequences and related info
-- a **data subdirectory** containing data files for created models, predictions, and smoothed errors for each channel. A file called `params.log` is also created that contains parameter settings and logging output during processing.
