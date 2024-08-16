@@ -6,10 +6,15 @@ authors = ["Valerio De Caro <valerio.decaro@phd.unipi.it>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-wget = "^3.2"
-torch = "^2.4.0"
-pylint = "^3.2.6"
+python = "^3.10"
+argparse = "^1.4.0"
+logging = "^0.4.9.6"
+numpy = "<2"
+pandas = "^2.2.2"
+scikit-learn = "^1.5.1"
+more-itertools = "^10.3.0"
+tqdm = "^4.66.5"
+datetime = "^5.5"
 
 [tool.poetry.group.dev]
 optional = true
