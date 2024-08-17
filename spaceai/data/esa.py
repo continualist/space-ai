@@ -240,30 +240,6 @@ class ESABenchmark(
         final_param_df.iloc[0] = channel_df.iloc[0]
         return final_param_df
 
-    def __encode_telecommands__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
-        """Encode telecommands as 0-1 peaks ensuring that they are not removed after
-        resampling.
-
-        Args:
-            channel_df (pd.DataFrame): The telecommands dataframe.
-
-        Returns:
-            pd.DataFrame: The telecommands dataframe with encoded telecommands.
-        """
-        resampling_rule = self.mission.resampling_rule
-        # Encode telecommands as 0-1 peaks ensuring that they are not removed after resampling
-        original_timestamps = channel_df.index.copy()
-        for timestamp in original_timestamps:
-            timestamp_before = timestamp - resampling_rule
-            if len(channel_df.loc[timestamp_before:timestamp]) == 1:
-                channel_df.loc[timestamp_before] = 0
-                channel_df = channel_df.sort_index()
-            timestamp_after = timestamp + resampling_rule
-            if len(channel_df.loc[timestamp:timestamp_after]) == 1:
-                channel_df.loc[timestamp_after] = 0
-                channel_df = channel_df.sort_index()
-        return channel_df
-
     def __load_parameter_dataset__(
         self,
         filepath: str,
@@ -334,7 +310,19 @@ class ESABenchmark(
         channel_df = channel_df.rename(columns={channel_id: "value"})
         channel_df.index = pd.to_datetime(channel_df.index)
         channel_df = channel_df[~channel_df.index.duplicated()]
-        return self.__encode_telecommands__(channel_df)
+
+        # Encode telecommands as 0-1 peaks ensuring that they are not removed after resampling
+        original_timestamps = channel_df.index.copy()
+        for timestamp in original_timestamps:
+            timestamp_before = timestamp - self.mission.resampling_rule
+            if len(channel_df.loc[timestamp_before:timestamp]) == 1:
+                channel_df.loc[timestamp_before] = 0
+                channel_df = channel_df.sort_index()
+            timestamp_after = timestamp + self.mission.resampling_rule
+            if len(channel_df.loc[timestamp:timestamp_after]) == 1:
+                channel_df.loc[timestamp_after] = 0
+                channel_df = channel_df.sort_index()
+        return channel_df
 
     def load_and_preprocess(
         self,
