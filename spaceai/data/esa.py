@@ -1,17 +1,23 @@
 # pylint: disable=missing-module-docstring, too-many-lines
+import logging
 import os
-import sys
-import zipfile
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import (
+    Literal,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
 import torch
-import wget
 
-from spaceai.benchmarks.benchmark import SpaceBenchmark
+from spaceai.utils.tools import download_and_extract_zip
+
+from .anomaly_dataset import AnomalyDataset
 
 
 class AnnotationLabel(
@@ -73,21 +79,29 @@ class ESAADMissions(Enum):
     )
 
 
-class ESAADBenchmark(
-    SpaceBenchmark,
-    torch.utils.data.Dataset,
-):  # pylint: disable=missing-class-docstring, too-few-public-methods, too-many-instance-attributes
+class ESABenchmark(
+    AnomalyDataset,
+):  # pylint: disable=too-few-public-methods, too-many-instance-attributes
+    """ESA benchmark dataset for anomaly detection.
+
+    The dataset consists of multivariate time series data collected from ESA's
+    spacecrafts telemetry data. The data is used to detect anomalies in the spacecrafts'
+    telemetry data and evaluate the performance of anomaly detection algorithms.
+    """
 
     def __init__(
         self,
         root: str,
         mission: ESAADMission,
         channel_id: str,
-        train: bool,
-        window_size: int = 250,
+        mode: Literal["prediction", "anomaly"],
+        overlapping: bool = False,
+        seq_length: Optional[int] = 250,
+        train: bool = True,
+        download: bool = True,
     ):  # pylint: disable=useless-parent-delegation, too-many-arguments
-        """ESAADBenchmark class that preprocesses and loads ESAAD dataset for training
-        and testing.
+        """ESABenchmark class that preprocesses and loads ESAAD dataset for training and
+        testing.
 
         Args:
             root (str): The root directory of the dataset.
@@ -96,64 +110,95 @@ class ESAADBenchmark(
             train (bool): The flag that indicates whether the dataset is for training or testing.
             window_size (int): The size of the window for each sample.
         """
-        super().__init__()
+        super().__init__(root)
+        if seq_length is None or seq_length < 1:
+            raise ValueError(f"Invalid window size: {seq_length}")
+
+        if mode not in ["prediction", "anomaly"]:
+            raise ValueError(f"Invalid mode {mode}")
+
         self.root = root
         self.mission = mission
-        self.train = train
-        self.channel_id = channel_id
-        self.window_size = window_size
+        self.channel_id: str = channel_id
+        self._mode: Literal["prediction", "anomaly"] = mode
+        self.overlapping: bool = overlapping
+        self.window_size: int = seq_length if seq_length else 250
+        self.train: bool = train
 
-        assert channel_id in self.mission.all_channels, "Invalid channel ID"
+        if not channel_id in self.mission.all_channels:
+            raise ValueError(f"Channel ID {channel_id} is not valid")
 
-        self.preprocessed_folder = Path(
-            os.path.abspath(os.path.join(self.root, "preprocessed"))
-        )
-        self.preprocessed_folder.mkdir(parents=True, exist_ok=True)
-        self.preprocessed_mission_folder = (
-            self.preprocessed_folder
-            / f'{mission.dirname}_{"train" if train else "test"}'
-        )
-        self.preprocessed_mission_folder.mkdir(parents=True, exist_ok=True)
-        self.preprocessed_channel_filepath = (
-            self.preprocessed_mission_folder / f"{channel_id}.csv"
-        )
-        self.__download_dataset__(
-            os.path.join(root, mission.dirname), mission.url_source
-        )
-        self.channel_data = self.__preprocess_channel_dataset__(channel_id)
-
-    def __len__(self):
-        return len(self.channel_data) // self.window_size
-
-    def __getitem__(self, idx):
-        start, end = idx * self.window_size, (idx + 1) * self.window_size
-        x_data = self.channel_data.iloc[start:end]["value"].values
-        y_data = self.channel_data.iloc[start:end]["label"].values
-        return torch.from_numpy(x_data), torch.from_numpy(y_data)
-
-    def __download_dataset__(self, root: str, url: str):
-        """Download the dataset from the given URL and extract it to the given
-        directory.
-
-        Args:
-            root (str): The base directory to save the dataset.
-            url (str): The URL of the dataset to download.
-        """
-        if not os.path.exists(root):
-
-            def bar_progress(current, total):
-                progress_message = (
-                    f"Downloading: {current / total * 100} [{current} / {total}] bytes"
+        train_test_label = "train" if train else "test"
+        self.preprocessed_channel_filepath = Path(
+            os.path.abspath(
+                os.path.join(
+                    self.root,
+                    "preprocessed",
+                    mission.dirname,
+                    f"{channel_id}_{train_test_label}.csv",
                 )
-                sys.stdout.write("\r" + progress_message)
-                sys.stdout.flush()
+            )
+        )
+        os.makedirs(os.path.dirname(self.preprocessed_channel_filepath), exist_ok=True)
 
-            zipfilepath = f"{root}.zip"
-            # ssl._create_default_https_context = ssl._create_unverified_context
-            wget.download(url, zipfilepath, bar=bar_progress)
-            with zipfile.ZipFile(zipfilepath, "r") as zip_ref:
-                zip_ref.extractall(root)
-            os.remove(zipfilepath)
+        if download:
+            self.download()
+
+        if not self._check_exists():
+            raise RuntimeError(
+                "Dataset not found. You can use download=True to download it"
+            )
+
+        if self._mode == "anomaly" and self.overlapping:
+            logging.warning(
+                f"Channel {channel_id} is in anomaly mode and overlapping is set to True."
+                " Anomalies will be repeated in the dataset."
+            )
+
+        self.data, self.anomalies = self.load_and_preprocess(channel_id)
+
+    def __getitem__(self, index: int) -> Union[
+        Tuple[torch.Tensor, torch.Tensor],
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+    ]:
+        """Return the data at the given index."""
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Index {index} out of bounds")
+        first_idx = index if self.overlapping else index * self.window_size
+        if first_idx + self.window_size + 1 > len(self.data):
+            first_idx -= 1
+
+        x, y_true = (
+            torch.tensor(self.data[first_idx : first_idx + self.window_size]),
+            torch.tensor(self.data[first_idx + 1 : first_idx + self.window_size + 1]),
+        )
+        if self._mode == "prediction":
+            return x.unsqueeze(1), y_true.unsqueeze(1)
+        anomalies = torch.tensor(
+            self.anomalies[first_idx + 1 : first_idx + self.window_size + 1]
+        ).int()
+        return x.unsqueeze(1), y_true.unsqueeze(1), anomalies.unsqueeze(1)
+
+    def __len__(self) -> int:
+        length = self.data.shape[0] - self.window_size - 1
+        if self.overlapping:
+            return length
+        return length // self.window_size
+
+    def download(self):
+        """Download the dataset from the given URL and extract it to the given
+        directory."""
+        if self._check_exists():
+            return
+        download_and_extract_zip(
+            self.mission.url_source,
+            os.path.join(self.root, self.mission.dirname),
+            cleanup=True,
+        )
+
+    def _check_exists(self) -> bool:
+        """Check if the dataset exists on the local filesystem."""
+        return os.path.exists(os.path.join(self.root, self.mission.dirname))
 
     def __filter_train_test__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
         """Filter the dataframe by train-test split.
@@ -170,7 +215,7 @@ class ESAADBenchmark(
             mask = channel_df.index > pd.to_datetime(self.mission.train_test_split)
         return channel_df[mask].copy()
 
-    def __apply_esampling_rule__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+    def __apply_resampling_rule__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
         """Resample the dataframe using zero order hold.
 
         Args:
@@ -258,9 +303,6 @@ class ESAADBenchmark(
                 anomaly_type = anomaly_types_df.loc[
                     anomaly_types_df["ID"] == row["ID"]
                 ]["Category"].values[0]
-                end_time = pd.Timestamp(row["EndTime"]).ceil(
-                    freq=self.mission.resampling_rule
-                )
                 if anomaly_type == "Anomaly":
                     label_value = AnnotationLabel.ANOMALY.value
                 elif anomaly_type == "Rare Event":
@@ -269,6 +311,9 @@ class ESAADBenchmark(
                     label_value = AnnotationLabel.GAP.value
                 else:
                     label_value = AnnotationLabel.INVALID.value
+                end_time = pd.Timestamp(row["EndTime"]).ceil(
+                    freq=self.mission.resampling_rule
+                )
                 channel_df.loc[row["StartTime"] : end_time, "label"] = label_value
         return channel_df
 
@@ -291,7 +336,7 @@ class ESAADBenchmark(
         channel_df = channel_df[~channel_df.index.duplicated()]
         return self.__encode_telecommands__(channel_df)
 
-    def __preprocess_channel_dataset__(
+    def load_and_preprocess(
         self,
         channel_id: str,
     ) -> pd.DataFrame:
@@ -332,20 +377,21 @@ class ESAADBenchmark(
             channel_df = self.__filter_train_test__(channel_df)
             if len(channel_df) == 0:
                 return []
-            channel_df = self.__apply_esampling_rule__(channel_df)
+            channel_df = self.__apply_resampling_rule__(channel_df)
 
-            channel_df["value"] = channel_df["value"].astype(np.float64).ffill().bfill()
+            channel_df["value"] = channel_df["value"].ffill().bfill().astype(np.float64)
             channel_df["label"] = channel_df["label"].ffill().bfill().astype(np.uint8)
             channel_df.to_csv(
                 self.preprocessed_channel_filepath, index=False, lineterminator="\n"
             )
-            return channel_df
-        with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
-            return pd.read_csv(fp)
+        else:
+            with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
+                channel_df = pd.read_csv(fp)
+        return channel_df["value"].values, channel_df["label"].values
 
 
 if __name__ == "__main__":
-    ROOT: str = "./benchmarks"
+    ROOT: str = "./datasets"
     if not os.path.exists(ROOT):
         os.mkdir(ROOT)
 
@@ -354,16 +400,17 @@ if __name__ == "__main__":
         ESAADMissions.MISSION_2.value,
     ]:
         for is_train in [True, False]:
-            dataset = ESAADBenchmark(
+            dataset = ESABenchmark(
                 root=ROOT,
                 mission=mission_metadata,
                 channel_id="channel_12",
                 train=is_train,
-                window_size=250,
+                seq_length=250,
+                mode="anomaly",
             )
             print(f"{dataset.mission.dirname} Dataset length:", len(dataset))
             dataloader = torch.utils.data.DataLoader(
                 dataset, batch_size=64, shuffle=True
             )
-            for i, (x, y) in enumerate(dataloader):
-                print(i, x.shape, y.shape)
+            for i, data in enumerate(dataloader):
+                print(i, *[v.shape for v in data])
