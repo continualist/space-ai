@@ -23,7 +23,7 @@ from .anomaly_dataset import AnomalyDataset
 class AnnotationLabel(
     Enum
 ):  # pylint: disable=missing-class-docstring, too-few-public-methods
-    """Enuemeration of annotation labels for ESAAD dataset."""
+    """Enuemeration of annotation labels for ESA dataset."""
 
     NOMINAL = 0
     ANOMALY = 1
@@ -33,17 +33,31 @@ class AnnotationLabel(
 
 
 @dataclass
-class ESAADMission:  # pylint: disable=too-many-instance-attributes
-    """ESAAD mission dataclass with metadata of a single mission."""
+class ESAMission:  # pylint: disable=too-many-instance-attributes
+    """ESA mission dataclass with metadata of a single mission."""
 
     index: int
+    """The index of the mission."""
     url_source: str
+    """The URL source of the mission data."""
     dirname: str
-    train_test_split: str
+    """The directory name of the mission data."""
+    train_test_split: pd.Timestamp
+    """The split date between training and testing data."""
+    start_date: pd.Timestamp
+    """The start date of the mission."""
+    end_date: pd.Timestamp
+    """The end date of the mission."""
     resampling_rule: pd.Timedelta
+    """The resampling rule for the data."""
     monotonic_channel_range: tuple[int, int]
+    """The range of monotonic channels."""
     parameters: list[str]
+    """The list of parameters."""
     telecommands: list[str]
+    """The list of telecommands."""
+    target_channels: list[str]
+    """The list of target channels."""
 
     @property
     def inner_dirpath(self):  # pylint: disable=missing-function-docstring
@@ -54,32 +68,49 @@ class ESAADMission:  # pylint: disable=too-many-instance-attributes
         return self.parameters + self.telecommands
 
 
-class ESAADMissions(Enum):
-    """ESAAD missions enumeration that contains metadata of mission1 and mission2."""
+class ESAMissions(Enum):
+    """ESA missions enumeration that contains metadata of mission1 and mission2."""
 
-    MISSION_1: ESAADMission = ESAADMission(
+    MISSION_1: ESAMission = ESAMission(
         index=1,
         url_source="https://zenodo.org/records/12528696/files/ESA-Mission1.zip?download=1",
         dirname="ESA-Mission1",
-        train_test_split="2007-01-01",
+        train_test_split=pd.to_datetime("2007-01-01"),
+        start_date=pd.to_datetime("2000-01-01"),
+        end_date=pd.to_datetime("2014-01-01"),
         resampling_rule=pd.Timedelta(seconds=30),
         monotonic_channel_range=(4, 11),
         parameters=[f"channel_{i + 1}" for i in range(76)],
         telecommands=[f"telecommand_{i + 1}" for i in range(698)],
+        target_channels=[
+            f"channel_{i}"
+            for i in [*list(range(12, 53)), *list(range(57, 67)), *list(range(70, 77))]
+        ],
     )
-    MISSION_2: ESAADMission = ESAADMission(
+    MISSION_2: ESAMission = ESAMission(
         index=2,
         url_source="https://zenodo.org/records/12528696/files/ESA-Mission2.zip?download=1",
         dirname="ESA-Mission2",
-        train_test_split="2001-10-01",
+        train_test_split=pd.to_datetime("2001-10-01"),
+        start_date=pd.to_datetime("2000-01-01"),
+        end_date=pd.to_datetime("2003-07-01"),
         resampling_rule=pd.Timedelta(seconds=18),
         monotonic_channel_range=(29, 46),
         parameters=[f"channel_{i + 1}" for i in range(100)],
         telecommands=[f"telecommand_{i + 1}" for i in range(123)],
+        target_channels=[
+            f"channel_{i}"
+            for i in [
+                *list(range(9, 29)),
+                *list(range(58, 60)),
+                *list(range(70, 92)),
+                *list(range(96, 99)),
+            ]
+        ],
     )
 
 
-class ESABenchmark(
+class ESA(
     AnomalyDataset,
 ):  # pylint: disable=too-few-public-methods, too-many-instance-attributes
     """ESA benchmark dataset for anomaly detection.
@@ -92,23 +123,28 @@ class ESABenchmark(
     def __init__(
         self,
         root: str,
-        mission: ESAADMission,
+        mission: ESAMission,
         channel_id: str,
         mode: Literal["prediction", "anomaly"],
         overlapping: bool = False,
         seq_length: Optional[int] = 250,
         train: bool = True,
         download: bool = True,
+        uniform_start_end_date: bool = False,
     ):  # pylint: disable=useless-parent-delegation, too-many-arguments
-        """ESABenchmark class that preprocesses and loads ESAAD dataset for training and
+        """ESABenchmark class that preprocesses and loads ESA dataset for training and
         testing.
 
         Args:
             root (str): The root directory of the dataset.
-            mission (ESAADMission): The mission type of the dataset.
+            mission (ESAMission): The mission type of the dataset.
             channel_id (str): The channel ID to be used.
+            mode (Literal["prediction", "anomaly"]): The mode of the dataset.
+            overlapping (bool): The flag that indicates whether the dataset is overlapping.
+            seq_length (Optional[int]): The length of the sequence for each sample.
             train (bool): The flag that indicates whether the dataset is for training or testing.
-            window_size (int): The size of the window for each sample.
+            download (bool): The flag that indicates whether the dataset should be downloaded.
+            uniform_start_end_date (bool): The flag that indicates whether the dataset should be resampled to have uniform start and end date.
         """
         super().__init__(root)
         if seq_length is None or seq_length < 1:
@@ -124,6 +160,7 @@ class ESABenchmark(
         self.overlapping: bool = overlapping
         self.window_size: int = seq_length if seq_length else 250
         self.train: bool = train
+        self.uniform_start_end_date: bool = uniform_start_end_date
 
         if not channel_id in self.mission.all_channels:
             raise ValueError(f"Channel ID {channel_id} is not valid")
@@ -200,7 +237,7 @@ class ESABenchmark(
         """Check if the dataset exists on the local filesystem."""
         return os.path.exists(os.path.join(self.root, self.mission.dirname))
 
-    def __filter_train_test__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_train_test_(self, channel_df: pd.DataFrame) -> pd.DataFrame:
         """Filter the dataframe by train-test split.
 
         Args:
@@ -210,12 +247,12 @@ class ESABenchmark(
             pd.DataFrame: The filtered dataframe.
         """
         if self.train:
-            mask = channel_df.index <= pd.to_datetime(self.mission.train_test_split)
+            mask = channel_df.index <= self.mission.train_test_split
         else:
-            mask = channel_df.index > pd.to_datetime(self.mission.train_test_split)
+            mask = channel_df.index > self.mission.train_test_split
         return channel_df[mask].copy()
 
-    def __apply_resampling_rule__(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+    def _apply_resampling_rule_(self, channel_df: pd.DataFrame) -> pd.DataFrame:
         """Resample the dataframe using zero order hold.
 
         Args:
@@ -224,23 +261,28 @@ class ESABenchmark(
         Returns:
             pd.DataFrame: The resampled dataframe.
         """
-        resampling_rule = self.mission.resampling_rule
         # Resample using zero order hold
-        first_index_resampled = pd.Timestamp(channel_df.index[0]).floor(
-            freq=resampling_rule
+        if self.uniform_start_end_date:
+            start_date, end_date = self.mission.start_date, self.mission.end_date
+        else:
+            start_date, end_date = channel_df.index[0], channel_df.index[-1]
+        first_index_resampled = pd.Timestamp(start_date).floor(
+            freq=self.mission.resampling_rule
         )
-        last_index_resampled = pd.Timestamp(channel_df.index[-1]).ceil(
-            freq=resampling_rule
+        last_index_resampled = pd.Timestamp(end_date).ceil(
+            freq=self.mission.resampling_rule
         )
         resampled_range = pd.date_range(
-            first_index_resampled, last_index_resampled, freq=resampling_rule
+            first_index_resampled,
+            last_index_resampled,
+            freq=self.mission.resampling_rule,
         )
         final_param_df = channel_df.reindex(resampled_range, method="ffill")
         # Initialize the first sample
         final_param_df.iloc[0] = channel_df.iloc[0]
         return final_param_df
 
-    def __load_parameter_dataset__(
+    def _load_parameter_dataset_(
         self,
         filepath: str,
         channel_id: str,
@@ -293,7 +335,7 @@ class ESABenchmark(
                 channel_df.loc[row["StartTime"] : end_time, "label"] = label_value
         return channel_df
 
-    def __load_telecommand_dataset__(
+    def _load_telecommand_dataset_(
         self, filepath: str, channel_id: str
     ) -> pd.DataFrame:
         """Load and preprocess the telecommand dataset.
@@ -348,7 +390,7 @@ class ESABenchmark(
         if not self.preprocessed_channel_filepath.exists():
             # Load and format parameter (channel)
             if channel_id in self.mission.parameters:
-                channel_df = self.__load_parameter_dataset__(
+                channel_df = self._load_parameter_dataset_(
                     os.path.join(source_folder, "channels", f"{channel_id}.zip"),
                     channel_id=channel_id,
                     labels_df=labels_df,
@@ -357,17 +399,17 @@ class ESABenchmark(
 
             # Load and format telecommand
             if channel_id in self.mission.telecommands:
-                channel_df = self.__load_telecommand_dataset__(
+                channel_df = self._load_telecommand_dataset_(
                     os.path.join(source_folder, "telecommands", f"{channel_id}.zip"),
                     channel_id=channel_id,
                 )
 
-            channel_df = self.__filter_train_test__(channel_df)
+            channel_df = self._filter_train_test_(channel_df)
             if len(channel_df) == 0:
                 return []
-            channel_df = self.__apply_resampling_rule__(channel_df)
+            channel_df = self._apply_resampling_rule_(channel_df)
 
-            channel_df["value"] = channel_df["value"].ffill().bfill().astype(np.float64)
+            channel_df["value"] = channel_df["value"].ffill().bfill().astype(np.float32)
             channel_df["label"] = channel_df["label"].ffill().bfill().astype(np.uint8)
             channel_df.to_csv(
                 self.preprocessed_channel_filepath, index=False, lineterminator="\n"
@@ -375,30 +417,6 @@ class ESABenchmark(
         else:
             with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
                 channel_df = pd.read_csv(fp)
-        return channel_df["value"].values, channel_df["label"].values
-
-
-if __name__ == "__main__":
-    ROOT: str = "./datasets"
-    if not os.path.exists(ROOT):
-        os.mkdir(ROOT)
-
-    for mission_metadata in [
-        ESAADMissions.MISSION_1.value,
-        ESAADMissions.MISSION_2.value,
-    ]:
-        for is_train in [True, False]:
-            dataset = ESABenchmark(
-                root=ROOT,
-                mission=mission_metadata,
-                channel_id="channel_12",
-                train=is_train,
-                seq_length=250,
-                mode="anomaly",
-            )
-            print(f"{dataset.mission.dirname} Dataset length:", len(dataset))
-            dataloader = torch.utils.data.DataLoader(
-                dataset, batch_size=64, shuffle=True
-            )
-            for i, data in enumerate(dataloader):
-                print(i, *[v.shape for v in data])
+        return channel_df["value"].values.astype(np.float32), channel_df[
+            "label"
+        ].values.astype(np.uint8)
