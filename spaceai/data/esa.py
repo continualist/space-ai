@@ -237,35 +237,26 @@ class ESA(
         """Check if the dataset exists on the local filesystem."""
         return os.path.exists(os.path.join(self.root, self.mission.dirname))
 
-    def _filter_train_test_(self, channel_df: pd.DataFrame) -> pd.DataFrame:
-        """Filter the dataframe by train-test split.
-
-        Args:
-            channel_df (pd.DataFrame): The dataframe to filter.
-
-        Returns:
-            pd.DataFrame: The filtered dataframe.
-        """
-        if self.train:
-            mask = channel_df.index <= self.mission.train_test_split
-        else:
-            mask = channel_df.index > self.mission.train_test_split
-        return channel_df[mask].copy()
-
-    def _apply_resampling_rule_(self, channel_df: pd.DataFrame) -> pd.DataFrame:
+    def _apply_resampling_rule_(
+        self, channel_df: pd.DataFrame, start_date: pd.DataFrame, end_date: pd.DataFrame
+    ) -> pd.DataFrame:
         """Resample the dataframe using zero order hold.
 
         Args:
             channel_df (pd.DataFrame): The dataframe to resample.
+            start_date (pd.Timestamp): The start date of the dataframe.
+            end_date (pd.Timestamp): The end date of the dataframe.
 
         Returns:
             pd.DataFrame: The resampled dataframe.
         """
         # Resample using zero order hold
-        if self.uniform_start_end_date:
-            start_date, end_date = self.mission.start_date, self.mission.end_date
+        if self.train:
+            if end_date > self.mission.train_test_split:
+                end_date = self.mission.train_test_split
         else:
-            start_date, end_date = channel_df.index[0], channel_df.index[-1]
+            if start_date < self.mission.train_test_split:
+                start_date = self.mission.train_test_split
         first_index_resampled = pd.Timestamp(start_date).floor(
             freq=self.mission.resampling_rule
         )
@@ -404,19 +395,26 @@ class ESA(
                     channel_id=channel_id,
                 )
 
-            channel_df = self._filter_train_test_(channel_df)
-            if len(channel_df) == 0:
-                return []
-            channel_df = self._apply_resampling_rule_(channel_df)
+            channel_df = self._apply_resampling_rule_(
+                channel_df,
+                channel_df.index[0],
+                channel_df.index[-1],
+            )
 
             channel_df["value"] = channel_df["value"].ffill().bfill().astype(np.float32)
             channel_df["label"] = channel_df["label"].ffill().bfill().astype(np.uint8)
-            channel_df.to_csv(
-                self.preprocessed_channel_filepath, index=False, lineterminator="\n"
-            )
+            channel_df.to_csv(self.preprocessed_channel_filepath, lineterminator="\n")
         else:
             with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
-                channel_df = pd.read_csv(fp)
+                channel_df = pd.read_csv(fp, index_col=0)
+                channel_df.index = pd.to_datetime(channel_df.index)
+        if self.uniform_start_end_date:
+            channel_df = self._apply_resampling_rule_(
+                channel_df,
+                self.mission.start_date,
+                self.mission.end_date,
+            )
+
         return channel_df["value"].values.astype(np.float32), channel_df[
             "label"
         ].values.astype(np.uint8)
