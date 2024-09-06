@@ -15,6 +15,7 @@ scikit-learn = "^1.5.1"
 more-itertools = "^10.3.0"
 tqdm = "^4.66.5"
 datetime = "^5.5"
+requests = "^2.32.3"
 
 [tool.poetry.group.dev]
 optional = true

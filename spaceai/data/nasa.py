@@ -230,10 +230,13 @@ class NASA(AnomalyDataset):
             anomaly_df = pd.read_csv(os.path.join(self.split_folder, "anomalies.csv"))
             anomaly_df = anomaly_df[anomaly_df["chan_id"] == self.channel_id]
             margins = anomaly_df["anomaly_sequences"]
-            margins = ast.literal_eval(margins.values[0])
-            for margin in margins:
-                for j in range(margin[0], margin[1] + 1):
-                    anomalies[j] = 1
+            if len(margins) > 0:
+                margins = ast.literal_eval(margins.values[0])
+                for margin in margins:
+                    for j in range(margin[0], margin[1] + 1):
+                        anomalies[j] = 1
+            else:
+                logging.warning(f"No anomalies found for channel {self.channel_id}")
 
         return data, np.array(anomalies)
 
