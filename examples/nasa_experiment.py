@@ -20,7 +20,7 @@ def main():
         volatility = np.std(nasa_channel.data)
 
         detector = Telemanom(low_perc, high_perc, volatility)
-        predictor = LSTM(1, [80, 80], 1, 0.3)
+        predictor = LSTM(1, [8], 1, 0.3)
         predictor.build()
 
         benchmark.run(
@@ -30,11 +30,12 @@ def main():
             fit_predictor_args=dict(
                 criterion=nn.MSELoss(),
                 optimizer=optim.Adam(predictor.model.parameters(), lr=0.001),
-                epochs=35,
+                epochs=1,
                 patience_before_stopping=10,
                 min_delta=0.0003,
                 batch_size=64,
             ),
+            overlapping_train=True,
         )
 
 

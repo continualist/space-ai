@@ -14,13 +14,14 @@ from typing import (
 import more_itertools as mit
 import numpy as np
 import pandas as pd
-import torch
 from torch.utils.data import (
     DataLoader,
     Subset,
 )
+from tqdm import tqdm
 
 from spaceai.data import NASA
+from spaceai.utils import data
 
 if TYPE_CHECKING:
     from spaceai.models.predictors import SequenceModel
@@ -59,6 +60,7 @@ class NASABenchmark(Benchmark):
         fit_predictor_args: Optional[Dict[str, Any]] = None,
         perc_eval: Optional[float] = 0.2,
         restore_predictor: bool = False,
+        overlapping_train: bool = True,
     ):
         """Runs the benchmark for a given channel.
 
@@ -68,8 +70,12 @@ class NASABenchmark(Benchmark):
             detector (AnomalyDetector): the anomaly detector to be used
             fit_predictor_args (Optional[Dict[str, Any]]): additional arguments for the predictor's fit method
             perc_eval (Optional[float]): the percentage of the training data to be used for evaluation
+            restore_predictor (bool): whether to restore the predictor from a previous run
+            overlapping_train (bool): whether to use overlapping sequences for training
         """
-        train_channel, test_channel = self.load_channel(channel_id)
+        train_channel, test_channel = self.load_channel(
+            channel_id, overlapping_train=overlapping_train
+        )
         os.makedirs(self.run_dir, exist_ok=True)
 
         results: Dict[str, Any] = {"channel_id": channel_id}
@@ -94,10 +100,18 @@ class NASABenchmark(Benchmark):
                 eval_channel = Subset(train_channel, indices[:eval_size])
                 train_channel = Subset(train_channel, indices[eval_size:])
             train_loader = DataLoader(
-                train_channel, batch_size=batch_size, shuffle=True
+                train_channel,
+                batch_size=batch_size,
+                shuffle=True,
+                collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
             )
             eval_loader = (
-                DataLoader(eval_channel, batch_size=batch_size, shuffle=False)
+                DataLoader(
+                    eval_channel,
+                    batch_size=batch_size,
+                    shuffle=False,
+                    collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
+                )
                 if eval_channel is not None
                 else None
             )
@@ -116,28 +130,42 @@ class NASABenchmark(Benchmark):
             )
             predictor.save(os.path.join(self.run_dir, f"predictor-{channel_id}.pt"))
 
-        t1 = time.time()
         print(f"Predicting the test data for channel {channel_id}...")
-        y_pred = predictor(
-            torch.tensor(test_channel.data[:-1]).unsqueeze(1).unsqueeze(2)
+        test_loader = DataLoader(
+            test_channel,
+            batch_size=1,
+            shuffle=False,
+            collate_fn=data.seq_collate_fn(n_inputs=3, mode="time"),
         )
-        if isinstance(y_pred, torch.Tensor):
-            y_pred = y_pred.detach().squeeze().cpu().numpy()
+        t1 = time.time()
+        y_pred, y_trg, anomalies = zip(
+            *[
+                (
+                    predictor(x).detach().squeeze().cpu().numpy(),
+                    y.detach().squeeze().cpu().numpy(),
+                    a.detach().squeeze().cpu().numpy(),
+                )
+                for x, y, a in tqdm(test_loader, desc="Predicting")
+            ]
+        )
+        y_pred, y_trg, anomalies = [
+            np.concatenate(seq) for seq in [y_pred, y_trg, anomalies]
+        ]
         t2 = time.time()
         results["predict_time"] = t2 - t1
-        results["test_loss"] = np.mean((y_pred - test_channel.data[1:]) ** 2)
+        results["test_loss"] = np.mean(((y_pred - y_trg) ** 2))  # type: ignore[operator]
         print("Test loss for channel", channel_id, ":", results["test_loss"])
         print("Prediction time for channel", channel_id, ":", results["predict_time"])
 
         # Testing the detector
         print("Detecting anomalies for channel", channel_id)
         t1 = time.time()
-        y_scores = detector.detect_anomalies(y_pred, test_channel.anomalies[1:])
+        y_scores = detector.detect_anomalies(y_pred, anomalies)
         t2 = time.time()
         results["detect_time"] = t2 - t1
         print("Detection time for channel", channel_id, ":", results["detect_time"])
 
-        y_true = test_channel.anomalies[detector.first_pred : detector.last_pred]
+        y_true = anomalies[detector.first_pred : detector.last_pred]
         true_idx, pred_idx = np.where(y_true == 1), np.where(y_scores != 0)
         true_seq = [list(group) for group in mit.consecutive_groups(true_idx[0])]
         pred_seq = [list(group) for group in mit.consecutive_groups(pred_idx[0])]
@@ -194,11 +222,14 @@ class NASABenchmark(Benchmark):
         )
         print(df)
 
-    def load_channel(self, channel_id: str) -> Tuple[NASA, NASA]:
+    def load_channel(
+        self, channel_id: str, overlapping_train: bool = True
+    ) -> Tuple[NASA, NASA]:
         """Load the training and testing datasets for a given channel.
 
         Args:
             channel_id (str): the ID of the channel to be used
+            overlapping_train (bool): whether to use overlapping sequences for training
 
         Returns:
             Tuple[NASA, NASA]: training and testing datasets
@@ -207,7 +238,7 @@ class NASABenchmark(Benchmark):
             root=self.data_root,
             channel_id=channel_id,
             mode="prediction",
-            overlapping=True,
+            overlapping=overlapping_train,
             seq_length=self.seq_length,
         )
 

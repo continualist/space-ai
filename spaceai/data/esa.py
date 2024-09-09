@@ -1,5 +1,6 @@
 # pylint: disable=missing-module-docstring, too-many-lines
 import logging
+import math
 import os
 from dataclasses import dataclass
 from enum import Enum
@@ -131,6 +132,7 @@ class ESA(
         train: bool = True,
         download: bool = True,
         uniform_start_end_date: bool = False,
+        drop_last: bool = True,
     ):  # pylint: disable=useless-parent-delegation, too-many-arguments
         """ESABenchmark class that preprocesses and loads ESA dataset for training and
         testing.
@@ -145,6 +147,7 @@ class ESA(
             train (bool): The flag that indicates whether the dataset is for training or testing.
             download (bool): The flag that indicates whether the dataset should be downloaded.
             uniform_start_end_date (bool): The flag that indicates whether the dataset should be resampled to have uniform start and end date.
+            drop_last (bool): The flag that indicates whether the last sample should be dropped.
         """
         super().__init__(root)
         if seq_length is None or seq_length < 1:
@@ -161,6 +164,7 @@ class ESA(
         self.window_size: int = seq_length if seq_length else 250
         self.train: bool = train
         self.uniform_start_end_date: bool = uniform_start_end_date
+        self.drop_last: bool = drop_last
 
         if not channel_id in self.mission.all_channels:
             raise ValueError(f"Channel ID {channel_id} is not valid")
@@ -202,25 +206,27 @@ class ESA(
         if index < 0 or index >= len(self):
             raise IndexError(f"Index {index} out of bounds")
         first_idx = index if self.overlapping else index * self.window_size
-        if first_idx + self.window_size + 1 > len(self.data):
-            first_idx -= 1
+        last_idx = first_idx + self.window_size + 1
+        if last_idx > len(self.data):
+            last_idx = len(self.data)
 
         x, y_true = (
-            torch.tensor(self.data[first_idx : first_idx + self.window_size]),
-            torch.tensor(self.data[first_idx + 1 : first_idx + self.window_size + 1]),
+            torch.tensor(self.data[first_idx : last_idx - 1]),
+            torch.tensor(self.data[first_idx + 1 : last_idx]),
         )
         if self._mode == "prediction":
             return x.unsqueeze(1), y_true.unsqueeze(1)
-        anomalies = torch.tensor(
-            self.anomalies[first_idx + 1 : first_idx + self.window_size + 1]
-        ).int()
+        anomalies = torch.tensor(self.anomalies[first_idx + 1 : last_idx]).int()
         return x.unsqueeze(1), y_true.unsqueeze(1), anomalies.unsqueeze(1)
 
     def __len__(self) -> int:
-        length = self.data.shape[0] - self.window_size - 1
+        length = self.data.shape[0] - self.window_size
         if self.overlapping:
             return length
-        return length // self.window_size
+        length = math.ceil(length / self.window_size)
+        if self.drop_last:
+            return length
+        return length + 1
 
     def download(self):
         """Download the dataset from the given URL and extract it to the given
