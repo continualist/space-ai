@@ -135,6 +135,7 @@ class SequenceModel:
                 if epoch_metrics["loss_eval"] < best_val_loss - min_delta_:
                     best_val_loss = epoch_metrics["loss_eval"]
                     epochs_since_improvement = 0
+                    best_model = copy.deepcopy(self.model.state_dict())
                 else:
                     epochs_since_improvement += 1
 
