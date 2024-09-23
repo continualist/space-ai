@@ -130,6 +130,8 @@ class NASABenchmark(Benchmark):
             )
             predictor.save(os.path.join(self.run_dir, f"predictor-{channel_id}.pt"))
 
+        if predictor.model is not None:
+            predictor.model.eval()
         print(f"Predicting the test data for channel {channel_id}...")
         test_loader = DataLoader(
             test_channel,
@@ -149,7 +151,8 @@ class NASABenchmark(Benchmark):
             ]
         )
         y_pred, y_trg, anomalies = [
-            np.concatenate(seq) for seq in [y_pred, y_trg, anomalies]
+            np.concatenate(seq)[test_channel.window_size - 1 :]
+            for seq in [y_pred, y_trg, anomalies]
         ]
         t2 = time.time()
         results["predict_time"] = t2 - t1
@@ -160,12 +163,13 @@ class NASABenchmark(Benchmark):
         # Testing the detector
         print("Detecting anomalies for channel", channel_id)
         t1 = time.time()
-        y_scores = detector.detect_anomalies(y_pred, anomalies)
+        y_scores = detector.detect_anomalies(y_pred, y_trg)
         t2 = time.time()
         results["detect_time"] = t2 - t1
         print("Detection time for channel", channel_id, ":", results["detect_time"])
 
         y_true = anomalies[detector.first_pred : detector.last_pred]
+
         true_idx, pred_idx = np.where(y_true == 1), np.where(y_scores != 0)
         true_seq = [list(group) for group in mit.consecutive_groups(true_idx[0])]
         pred_seq = [list(group) for group in mit.consecutive_groups(pred_idx[0])]
@@ -249,6 +253,7 @@ class NASABenchmark(Benchmark):
             overlapping=False,
             seq_length=self.seq_length,
             train=False,
+            drop_last=False,
         )
 
         return train_channel, test_channel

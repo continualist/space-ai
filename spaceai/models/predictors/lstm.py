@@ -21,6 +21,7 @@ class LSTM(SequenceModel):
         output_size: int,
         dropout: float,
         device: Literal["cpu", "cuda"] = "cpu",
+        stateful: bool = False,
     ):
         """Initialize the LSTM model.
 
@@ -30,7 +31,7 @@ class LSTM(SequenceModel):
             output_size (int): Number of features in the output data.
             dropout (float): Dropout rate.
         """
-        super().__init__(device)
+        super().__init__(device, stateful=stateful)
         self.input_size: int = input_size
         self.hidden_sizes: List[int] = hidden_sizes
         self.output_size: int = output_size
@@ -86,8 +87,12 @@ class _LSTM(nn.Module):
         Returns:
             Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]: Output data.
         """
-        h, *_ = self.lstm(x)
+        h, states = (
+            self.lstm(x, initial_state) if initial_state is not None else self.lstm(x)
+        )
         out = self.fc(h)
+        if return_states:
+            return out, states
         return out
 
 

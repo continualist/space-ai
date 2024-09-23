@@ -38,6 +38,8 @@ class Telemanom(ErrorBasedDetector):
         ignore_first_n_factor: float = 2,
         pruning_factor: float = 0.12,
         force_early_anomaly: bool = False,
+        adjust_ewma: bool = True,
+        batch_size_ewma: int = 1000,
     ):
         """Batch processing of errors between actual and predicted values for a channel.
 
@@ -70,6 +72,9 @@ class Telemanom(ErrorBasedDetector):
             pruning_factor (float): factor for pruning the anomalies that don't meet the
                 minimum separation according to the p-value. We suggest setting this
                 parameter to 0.12.
+            force_early_anomaly (bool): whether to force an anomaly in the first window
+            adjust_ewma (bool): whether to adjust the EWMA smoothing parameter.
+            batch_size_ewma (int): batch size for the EWMA smoothing.
         """
         if error_offset < 0:
             raise ValueError("error_offset must be greater than or equal to 0")
@@ -91,7 +96,11 @@ class Telemanom(ErrorBasedDetector):
         self.p: float = pruning_factor
         self.force_early_anomaly: bool = force_early_anomaly
 
-        self.ewma = EWMA(int(window_size * smoothing_perc))
+        self.ewma = EWMA(
+            int(window_size * smoothing_perc),
+            adjust=adjust_ewma,
+            batch_size=batch_size_ewma,
+        )
         self.window = np.array([])
         self.eval_buffer = np.array([])
         self.n_window: int = 0
@@ -293,9 +302,11 @@ class Telemanom(ErrorBasedDetector):
         # Check: scale of errors compared to values too small?
         max_error = max(e_s)
         if (
-            not max_error > 0.05
-            or max_error > (0.05 * self.inter_range)
-            or not sd_e_s > (0.05 * self.sd_values)
+            not (
+                sd_e_s > (0.05 * self.sd_values)
+                or max_error > (0.05 * self.inter_range)
+            )
+            or not max_error > 0.05
         ):
             return np.array([]), [], float("-inf")
 
@@ -402,7 +413,6 @@ class Telemanom(ErrorBasedDetector):
         Returns:
             List[Dict[str, float]]: anomaly scores
         """
-
         groups = [list(group) for group in mit.consecutive_groups(i_anom)]
         scores = np.zeros(self.n_eval)
         for e_seq in groups:
@@ -415,11 +425,11 @@ class Telemanom(ErrorBasedDetector):
             )
 
             max_score = max([score, inv_score])
-            scores[min_idx:max_idx] = max_score
+            scores[min_idx - i_anom[0] : max_idx - i_anom[0]] = max_score
         return scores
 
     def reset_state(self):
-        self.ewma = EWMA(int(self.window_size * self.smoothing_perc))
+        self.ewma.reset()
         self.window = np.array([])
         self.eval_buffer = np.array([])
         self.n_window = 0
@@ -437,26 +447,52 @@ class Telemanom(ErrorBasedDetector):
 
 
 class EWMA:
-    def __init__(self, window_size: int):
+    def __init__(self, window_size: int, adjust: bool = True, batch_size: int = 1000):
         self.window_size = window_size
-        self.alpha = 2 / (window_size + 1.0)
-        self.alpha_rev = 1 - self.alpha
-        self.last_ewma = 0
+        self.adjust = adjust
+        self.batch_size = batch_size
+        alpha = 2 / (window_size + 1.0)
+        self.alpha_rev = 1 - alpha
+        self.alpha = 1 if adjust else alpha
+        self.last_ewma = 0 if self.adjust else None
+        self.last_div = 0
+
+    def reset(self):
+        self.last_ewma = 0 if self.adjust else None
+        self.last_div = 0
 
     def __call__(self, data: np.ndarray) -> np.ndarray:
+        return np.concatenate(
+            [
+                self.run(data[i : i + self.batch_size])
+                for i in range(0, len(data), self.batch_size)
+            ]
+        )
+
+    def run(self, data: np.ndarray) -> np.ndarray:
         n = data.shape[0]
-        pows = self.alpha_rev ** (np.arange(n + 1))
+        pows = self.alpha_rev ** np.arange(n + 1)
+
+        if self.last_ewma is None:
+            self.last_ewma = data[0]
 
         scale_arr = 1 / pows[:-1]
         offset = self.last_ewma * pows[1:]
+        if self.adjust:
+            offset_div = self.last_div * pows[1:]
+
         pw0 = self.alpha * self.alpha_rev ** (n - 1)
 
         mult = data * pw0 * scale_arr
         cumsums = mult.cumsum()
         ewma_result = offset + (cumsums * scale_arr[::-1])
 
-        # Update the internal state with the last value of the computed EWMA
         self.last_ewma = ewma_result[-1]
+
+        if self.adjust:
+            div = pows[:-1].cumsum() + offset_div
+            self.last_div = div[-1]
+            return ewma_result / div
 
         return ewma_result
 
