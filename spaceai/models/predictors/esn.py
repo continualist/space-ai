@@ -36,6 +36,7 @@ class ESN(SequenceModel):
         recurrent_initializer: Union[str, Callable[[Size], Tensor]] = "normal",
         net_gain_and_bias: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
+        stateful: bool = False,
     ):
         """Initialize the ESN model.
 
@@ -54,7 +55,7 @@ class ESN(SequenceModel):
             net_gain_and_bias (bool, optional): If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Defaults to False.
             device (Literal["cpu", "cuda"], optional): Device to move the model to. Defaults to "cpu".
         """
-        super().__init__(device)
+        super().__init__(device, stateful=stateful)
         self.model: EchoStateNetwork
         self.input_size: int = input_size
         self.layers: List[int] = layers

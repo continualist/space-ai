@@ -2,6 +2,7 @@ import os
 import zipfile
 from typing import Optional
 
+import psutil
 import requests  # type: ignore[import-untyped]
 from tqdm import tqdm
 
@@ -40,3 +41,9 @@ def extract_zip(filename: str, extract_to: str, cleanup: bool = False):
 
     if cleanup:
         os.remove(filename)
+
+
+def get_memory_rss():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    return mem_info.rss

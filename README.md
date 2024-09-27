@@ -53,4 +53,3 @@ To provide your own labels, use the `labeled_anomalies.csv` file as a template. 
 | SMAP 		  		| 85.5%     | 85.5%	   | 0.71	  |
 | Curiosity (MSL)	| 92.6%  	| 69.4%    | 0.69     |
 | Total 			| 87.5% 	| 80.0%	   | 0.71     |
-

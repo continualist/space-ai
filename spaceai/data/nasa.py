@@ -1,5 +1,6 @@
 import ast
 import logging
+import math
 import os
 from typing import (
     Literal,
@@ -128,6 +129,7 @@ class NASA(AnomalyDataset):
         seq_length: Optional[int] = 250,
         train: bool = True,
         download: bool = True,
+        drop_last: bool = True,
     ):
         """Initialize the dataset for a given channel.
 
@@ -137,6 +139,7 @@ class NASA(AnomalyDataset):
             seq_length (int): the size of the sliding window
             train (bool): whether to use the training or test data
             download (bool): whether to download the dataset
+            drop_last (bool): whether to drop the last incomplete sequence
         """
         super().__init__(root)
         if seq_length is None or seq_length < 1:
@@ -146,6 +149,7 @@ class NASA(AnomalyDataset):
         self.overlapping: bool = overlapping
         self.window_size: int = seq_length if seq_length else 250
         self.train: bool = train
+        self.drop_last: bool = drop_last
 
         if not channel_id in self.channel_ids:
             raise ValueError(f"Channel ID {channel_id} is not valid")
@@ -174,25 +178,24 @@ class NASA(AnomalyDataset):
         if index < 0 or index >= len(self):
             raise IndexError(f"Index {index} out of bounds")
         first_idx = index if self.overlapping else index * self.window_size
-        if first_idx + self.window_size + 1 > len(self.data):
-            first_idx -= 1
+        last_idx = first_idx + self.window_size + 1
+        if last_idx > len(self.data):
+            last_idx = len(self.data)
 
         x, y_true = (
-            torch.tensor(self.data[first_idx : first_idx + self.window_size]),
-            torch.tensor(self.data[first_idx + 1 : first_idx + self.window_size + 1]),
+            torch.tensor(self.data[first_idx : last_idx - 1]),
+            torch.tensor(self.data[first_idx + 1 : last_idx]),
         )
-        if self._mode == "prediction":
-            return x.unsqueeze(1), y_true.unsqueeze(1)
-        anomalies = torch.tensor(
-            self.anomalies[first_idx + 1 : first_idx + self.window_size + 1]
-        ).int()
-        return x.unsqueeze(1), y_true.unsqueeze(1), anomalies.unsqueeze(1)
+        return x.unsqueeze(1), y_true.unsqueeze(1)
 
     def __len__(self) -> int:
-        length = self.data.shape[0] - self.window_size - 1
+        length = self.data.shape[0] - self.window_size
         if self.overlapping:
             return length
-        return length // self.window_size
+        length = math.ceil(length / self.window_size)
+        if self.drop_last:
+            return length
+        return length + 1
 
     def _check_exists(self) -> bool:
         """Check if the dataset exists on the local filesystem."""
@@ -223,22 +226,19 @@ class NASA(AnomalyDataset):
         if self._mode == "prediction":
             return data, None
 
-        anomalies = [0 for _ in range(len(data))]  # Normal by default (train)
+        anomalies: list[list[int]] = []  # Normal by default (train)
 
         # Load the anomalies for the test data
         if not self.train:
             anomaly_df = pd.read_csv(os.path.join(self.split_folder, "anomalies.csv"))
             anomaly_df = anomaly_df[anomaly_df["chan_id"] == self.channel_id]
-            margins = anomaly_df["anomaly_sequences"]
-            if len(margins) > 0:
-                margins = ast.literal_eval(margins.values[0])
-                for margin in margins:
-                    for j in range(margin[0], margin[1] + 1):
-                        anomalies[j] = 1
+            anomaly_seq_df = anomaly_df["anomaly_sequences"]
+            if len(anomalies) > 0:
+                anomalies = ast.literal_eval(anomaly_seq_df.values[0])
             else:
                 logging.warning(f"No anomalies found for channel {self.channel_id}")
 
-        return data, np.array(anomalies)
+        return data, anomalies
 
     @property
     def split_folder(self) -> str:

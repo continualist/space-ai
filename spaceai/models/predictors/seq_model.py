@@ -64,7 +64,7 @@ class SequenceModel:
         if not self.stateful:
             pred = self.model(input)
         else:
-            pred, self.state = self.model(input, self.state, return_state=True)
+            pred, self.state = self.model(input, self.state, return_states=True)
         return pred
 
     def fit(
@@ -122,7 +122,7 @@ class SequenceModel:
                             else:
                                 epoch_metrics[f"{name}_train"] += metric(
                                     outputs, targets
-                                ) * inputs.size(0)
+                                ) * inputs.size(1)
                 for name in epoch_metrics:
                     epoch_metrics[name] /= len(train_loader.dataset)
                 if valid_loader is not None:
@@ -135,6 +135,7 @@ class SequenceModel:
                 if epoch_metrics["loss_eval"] < best_val_loss - min_delta_:
                     best_val_loss = epoch_metrics["loss_eval"]
                     epochs_since_improvement = 0
+                    best_model = copy.deepcopy(self.model.state_dict())
                 else:
                     epochs_since_improvement += 1
 
@@ -179,7 +180,7 @@ class SequenceModel:
                 for name, metric in metrics_.items():
                     metrics_values[f"{name}_eval"] += metric(
                         outputs, targets
-                    ) * inputs.size(0)
+                    ) * inputs.size(1)
 
         for name in metrics_values:
             metrics_values[name] /= len(eval_loader.dataset)
