@@ -186,10 +186,7 @@ class NASA(AnomalyDataset):
             torch.tensor(self.data[first_idx : last_idx - 1]),
             torch.tensor(self.data[first_idx + 1 : last_idx]),
         )
-        if self._mode == "prediction":
-            return x.unsqueeze(1), y_true.unsqueeze(1)
-        anomalies = torch.tensor(self.anomalies[first_idx + 1 : last_idx]).int()
-        return x.unsqueeze(1), y_true.unsqueeze(1), anomalies.unsqueeze(1)
+        return x.unsqueeze(1), y_true.unsqueeze(1)
 
     def __len__(self) -> int:
         length = self.data.shape[0] - self.window_size
@@ -229,22 +226,19 @@ class NASA(AnomalyDataset):
         if self._mode == "prediction":
             return data, None
 
-        anomalies = [0 for _ in range(len(data))]  # Normal by default (train)
+        anomalies: list[list[int]] = []  # Normal by default (train)
 
         # Load the anomalies for the test data
         if not self.train:
             anomaly_df = pd.read_csv(os.path.join(self.split_folder, "anomalies.csv"))
             anomaly_df = anomaly_df[anomaly_df["chan_id"] == self.channel_id]
-            margins = anomaly_df["anomaly_sequences"]
-            if len(margins) > 0:
-                margins = ast.literal_eval(margins.values[0])
-                for margin in margins:
-                    for j in range(margin[0], margin[1] + 1):
-                        anomalies[j] = 1
+            anomaly_seq_df = anomaly_df["anomaly_sequences"]
+            if len(anomalies) > 0:
+                anomalies = ast.literal_eval(anomaly_seq_df.values[0])
             else:
                 logging.warning(f"No anomalies found for channel {self.channel_id}")
 
-        return data, np.array(anomalies)
+        return data, anomalies
 
     @property
     def split_folder(self) -> str:

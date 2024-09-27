@@ -173,7 +173,7 @@ class ESABenchmark(Benchmark):
         results["detect_time"] = t2 - t1
         print("Detection time for channel", channel_id, ":", results["detect_time"])
 
-        y_true = anomalies[detector.first_pred : detector.last_pred]
+        y_true = anomalies
         true_idx, pred_idx = np.where(y_true == 1), np.where(y_scores != 0)
         true_seq = [list(group) for group in mit.consecutive_groups(true_idx[0])]
         pred_seq = [list(group) for group in mit.consecutive_groups(pred_idx[0])]

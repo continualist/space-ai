@@ -11,7 +11,6 @@ from typing import (
     Tuple,
 )
 
-import more_itertools as mit
 import numpy as np
 import pandas as pd
 from torch.utils.data import (
@@ -22,6 +21,7 @@ from tqdm import tqdm
 
 from spaceai.data import NASA
 from spaceai.utils import data
+from spaceai.utils.tools import get_memory_rss
 
 if TYPE_CHECKING:
     from spaceai.models.predictors import SequenceModel
@@ -115,13 +115,16 @@ class NASABenchmark(Benchmark):
                 if eval_channel is not None
                 else None
             )
+            results["train_memory_start"] = get_memory_rss()
             t1 = time.time()
+            predictor.stateful = False
             train_history = predictor.fit(
                 train_loader=train_loader,
                 valid_loader=eval_loader,
                 **fit_predictor_args,
             )
             t2 = time.time()
+            results["train_memory_end"] = get_memory_rss()
             results["train_time"] = t2 - t1
             print("Training time on channel", channel_id, ":", results["train_time"])
             train_history = pd.DataFrame.from_records(train_history).to_csv(
@@ -137,24 +140,26 @@ class NASABenchmark(Benchmark):
             test_channel,
             batch_size=1,
             shuffle=False,
-            collate_fn=data.seq_collate_fn(n_inputs=3, mode="time"),
+            collate_fn=data.seq_collate_fn(n_inputs=2, mode="time"),
         )
+        results["predict_memory_start"] = get_memory_rss()
         t1 = time.time()
-        y_pred, y_trg, anomalies = zip(
+        predictor.stateful = True
+        y_pred, y_trg = zip(
             *[
                 (
                     predictor(x).detach().squeeze().cpu().numpy(),
                     y.detach().squeeze().cpu().numpy(),
-                    a.detach().squeeze().cpu().numpy(),
                 )
-                for x, y, a in tqdm(test_loader, desc="Predicting")
+                for x, y in tqdm(test_loader, desc="Predicting")
             ]
         )
-        y_pred, y_trg, anomalies = [
+        y_pred, y_trg = [
             np.concatenate(seq)[test_channel.window_size - 1 :]
-            for seq in [y_pred, y_trg, anomalies]
+            for seq in [y_pred, y_trg]
         ]
         t2 = time.time()
+        results["predict_memory_end"] = get_memory_rss()
         results["predict_time"] = t2 - t1
         results["test_loss"] = np.mean(((y_pred - y_trg) ** 2))  # type: ignore[operator]
         print("Test loss for channel", channel_id, ":", results["test_loss"])
@@ -162,63 +167,28 @@ class NASABenchmark(Benchmark):
 
         # Testing the detector
         print("Detecting anomalies for channel", channel_id)
+        results["detect_memory_start"] = get_memory_rss()
         t1 = time.time()
-        y_scores = detector.detect_anomalies(y_pred, y_trg)
+        pred_anomalies = detector.detect_anomalies(y_pred, y_trg)
         t2 = time.time()
+        results["detect_memory_end"] = get_memory_rss()
         results["detect_time"] = t2 - t1
         print("Detection time for channel", channel_id, ":", results["detect_time"])
 
-        y_true = anomalies[detector.first_pred : detector.last_pred]
+        true_anomalies = test_channel.anomalies
 
-        true_idx, pred_idx = np.where(y_true == 1), np.where(y_scores != 0)
-        true_seq = [list(group) for group in mit.consecutive_groups(true_idx[0])]
-        pred_seq = [list(group) for group in mit.consecutive_groups(pred_idx[0])]
-
-        is_false_positive = [1 for _ in range(len(pred_seq))]
-        results["n_anomalies"] = len(true_seq)
-        results["n_detected"] = len(pred_seq)
-        results["true_positives"] = 0
-        results["false_positives"] = 0
-        results["false_negatives"] = 0
-
-        for t_seq in true_seq:
-            detected = False
-            for i, p_seq in enumerate(pred_seq):
-                if len(set(t_seq) & set(p_seq)) > 0:
-                    detected = True
-                    is_false_positive[i] = 0
-                    break
-            if detected:
-                results["true_positives"] += 1
-            else:
-                results["false_negatives"] += 1
-
-        results["false_positives"] = sum(is_false_positive)
-        results["precision"] = (
-            results["true_positives"] / results["n_detected"]
-            if results["n_detected"] > 0
-            else 0
+        classification_results = self.compute_classification_metrics(
+            true_anomalies, pred_anomalies
         )
-        results["recall"] = (
-            results["true_positives"] / results["n_anomalies"]
-            if results["n_anomalies"] > 0
-            else 0
-        )
-        results["f1"] = (
-            (
-                2
-                * (results["precision"] * results["recall"])
-                / (results["precision"] + results["recall"])
-            )
-            if results["precision"] + results["recall"] > 0
-            else 0
-        )
+        results.update(classification_results)
         if train_history is not None:
             results["train_loss"] = train_history[-1]["loss_train"]
             if eval_loader is not None:
                 results["eval_loss"] = train_history[-1]["loss_eval"]
+
         print("Results for channel", channel_id)
         print(results)
+
         self.all_results.append(results)
 
         df = pd.DataFrame.from_records(self.all_results).to_csv(
@@ -257,3 +227,63 @@ class NASABenchmark(Benchmark):
         )
 
         return train_channel, test_channel
+
+    def compute_classification_metrics(self, true_anomalies, pred_anomalies):
+        results = {
+            "n_anomalies": len(true_anomalies),
+            "n_detected": len(pred_anomalies),
+            "true_positives": 0,
+            "false_positives": 0,
+            "false_negatives": 0,
+        }
+
+        matched_true_seqs = []
+        true_indices_grouped = [list(range(e[0], e[1] + 1)) for e in true_anomalies]
+        true_indices_flat = set([i for group in true_indices_grouped for i in group])
+        for e_seq in pred_anomalies:
+            i_anom_predicted = set(range(e_seq[0], e_seq[1] + 1))
+
+            matched_indices = list(i_anom_predicted & true_indices_flat)
+            valid = True if len(matched_indices) > 0 else False
+
+            if valid:
+                true_seq_index = [
+                    i
+                    for i in range(len(true_indices_grouped))
+                    if len(
+                        np.intersect1d(list(i_anom_predicted), true_indices_grouped[i])
+                    )
+                    > 0
+                ]
+
+                if not true_seq_index[0] in matched_true_seqs:
+                    matched_true_seqs.append(true_seq_index[0])
+                    results["true_positives"] += 1
+
+            else:
+                results["false_positives"] += 1
+
+        results["false_negatives"] = len(
+            np.delete(true_anomalies, matched_true_seqs, axis=0)
+        )
+
+        results["precision"] = (
+            results["true_positives"] / results["n_detected"]
+            if results["n_detected"] > 0
+            else 0
+        )
+        results["recall"] = (
+            results["true_positives"] / results["n_anomalies"]
+            if results["n_anomalies"] > 0
+            else 0
+        )
+        results["f1"] = (
+            (
+                2
+                * (results["precision"] * results["recall"])
+                / (results["precision"] + results["recall"])
+            )
+            if results["precision"] + results["recall"] > 0
+            else 0
+        )
+        return results
