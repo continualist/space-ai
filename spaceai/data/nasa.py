@@ -233,7 +233,7 @@ class NASA(AnomalyDataset):
             anomaly_df = pd.read_csv(os.path.join(self.split_folder, "anomalies.csv"))
             anomaly_df = anomaly_df[anomaly_df["chan_id"] == self.channel_id]
             anomaly_seq_df = anomaly_df["anomaly_sequences"]
-            if len(anomalies) > 0:
+            if len(anomaly_seq_df) > 0:
                 anomalies = ast.literal_eval(anomaly_seq_df.values[0])
             else:
                 logging.warning(f"No anomalies found for channel {self.channel_id}")
