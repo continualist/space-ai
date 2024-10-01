@@ -25,7 +25,7 @@ def main():
         volatility = np.std(y_test)
 
         detector = Telemanom(low_perc, high_perc, volatility, pruning_factor=0.12)
-        predictor = LSTM(1, [80, 80], 1, 0.3)
+        predictor = LSTM(nasa_channel.in_features_size, [80, 80], 1, 0.3)
         predictor.build()
 
         benchmark.run(
