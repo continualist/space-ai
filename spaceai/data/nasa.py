@@ -184,9 +184,9 @@ class NASA(AnomalyDataset):
 
         x, y_true = (
             torch.tensor(self.data[first_idx : last_idx - 1]),
-            torch.tensor(self.data[first_idx + 1 : last_idx]),
+            torch.tensor(self.data[first_idx + 1 : last_idx, 0]),
         )
-        return x.unsqueeze(1), y_true.unsqueeze(1)
+        return x, y_true.unsqueeze(1)
 
     def __len__(self) -> int:
         length = self.data.shape[0] - self.window_size
@@ -222,7 +222,7 @@ class NASA(AnomalyDataset):
 
         data = np.load(
             os.path.join(self.split_folder, f"{self.channel_id}.npy")
-        ).astype(np.float32)[:, 0]
+        ).astype(np.float32)
         if self._mode == "prediction":
             return data, None
 
@@ -244,6 +244,11 @@ class NASA(AnomalyDataset):
     def split_folder(self) -> str:
         """Return the path to the folder containing the split data."""
         return os.path.join(self.raw_folder, "data", "train" if self.train else "test")
+
+    @property
+    def in_features_size(self) -> str:
+        """Return the size of the input features."""
+        return self.data.shape[-1]
 
     @property
     def mode(self) -> str:
