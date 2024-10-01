@@ -20,7 +20,7 @@ def main():
         nasa_channel = NASA(
             "datasets", channel_id, mode="anomaly", train=False
         )
-        y_test = nasa_channel.data[nasa_channel.window_size - 1:]
+        y_test = nasa_channel.data[nasa_channel.window_size - 1:, 0]
         low_perc, high_perc = np.percentile(y_test, [5, 95])
         volatility = np.std(y_test)
 
@@ -41,7 +41,7 @@ def main():
                 batch_size=64,
             ),
             overlapping_train=True,
-            restore_predictor=True,
+            # restore_predictor=True,
         )
         
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
