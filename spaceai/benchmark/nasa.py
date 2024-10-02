@@ -131,7 +131,9 @@ class NASABenchmark(Benchmark):
                 os.path.join(self.run_dir, f"train_history-{channel_id}.csv"),
                 index=False,
             )
-            predictor.save(os.path.join(self.run_dir, f"predictor-{channel_id}.pt"))
+            predictor_path = os.path.join(self.run_dir, f"predictor-{channel_id}.pt")
+            predictor.save(predictor_path)
+            results["disk_usage"] = os.path.getsize(predictor_path)
 
         if predictor.model is not None:
             predictor.model.eval()
