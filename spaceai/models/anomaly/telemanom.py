@@ -396,7 +396,7 @@ class Telemanom(ErrorBasedDetector):
         self.window = np.array([])
         self.eval_buffer = np.array([])
         self.n_window = 0
-        self._predictor.reset_state()
+        # self._predictor.reset_state()
 
     @property
     def n_eval(self) -> int:
