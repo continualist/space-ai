@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Dict,
     List,
     Literal,
     Optional,
@@ -14,9 +15,11 @@ if TYPE_CHECKING:
     from torch.nn.modules import Module
     from torch.utils.data import DataLoader
 
+import numpy as np
+import torch
 from torchrc.models.esn import EchoStateNetwork
 
-from .seq_model import SequenceModel
+from spaceai.models.predictors.seq_model import SequenceModel
 
 
 class ESN(SequenceModel):
@@ -35,6 +38,7 @@ class ESN(SequenceModel):
         kernel_initializer: Union[str, Callable[[Size], Tensor]] = "uniform",
         recurrent_initializer: Union[str, Callable[[Size], Tensor]] = "normal",
         net_gain_and_bias: bool = False,
+        gradient_based: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
         stateful: bool = False,
     ):
@@ -66,6 +70,7 @@ class ESN(SequenceModel):
         self.input_scaling: float = input_scaling
         self.rho: float = rho
         self.bias: bool = bias
+        self.gradient_based: bool = gradient_based
         self.kernel_initializer: Union[str, Callable[[Size], Tensor]] = (
             kernel_initializer
         )
@@ -74,30 +79,72 @@ class ESN(SequenceModel):
         )
         self.net_gain_and_bias: bool = net_gain_and_bias
 
+    def __call__(self, input: Union[torch.Tensor, np.ndarray]) -> torch.Tensor:
+        """Predicts values using the trained model.
+
+        Args:
+            input (Union[torch.Tensor, np.ndarray]): Input data to predict on
+
+        Returns:
+            torch.Tensor: Predicted values
+        """
+        if self.model is None:
+            raise ValueError("Model must be built before calling predict.")
+
+        if isinstance(input, np.ndarray):
+            input = torch.from_numpy(input).float()
+
+        if not self.stateful:
+            pred = self.model(input)
+        else:
+            pred, self.state = self.model(
+                input,
+                [s[-1] for s in self.state] if self.state is not None else None,
+                return_states=True,
+            )
+        return pred
+
     def fit(  # type: ignore[override]
         self,
         train_loader: DataLoader,
-        l2_value: Union[float, List[float]] = 1e-6,
-        score_fn: Optional[Callable[[Tensor, Tensor], float]] = None,
-        mode: Optional[Literal["min", "max"]] = None,
-        eval_on: Optional[Union[Literal["train"], DataLoader]] = None,
+        criterion: Callable[
+            [torch.Tensor, torch.Tensor], torch.Tensor
+        ] = torch.nn.MSELoss(),
+        *args,
+        valid_loader: Optional[DataLoader] = None,
+        metrics: Optional[
+            Dict[str, Callable[[torch.Tensor, torch.Tensor], float]]
+        ] = None,
+        **kwargs,
     ):
-        """Train the ESN model.
+        """Train the ESN model."""
+        if self.gradient_based:
+            return super().fit(  # type: ignore
+                *args,
+                train_loader=train_loader,
+                criterion=criterion,
+                valid_loader=valid_loader,
+                metrics=metrics,
+                **kwargs,
+            )
+        else:
+            self.model.fit_readout(*args, train_loader=train_loader, **kwargs)
 
-        Args:
-            train_loader (DataLoader): DataLoader containing training data.
-            l2_value (Union[float, List[float]], optional): The value of l2 regularization. Defaults to 1e-6.
-            score_fn (Optional[Callable[[Tensor, Tensor], float]], optional): Function to calculate the score. Defaults to None.
-            mode (Optional[Literal["min", "max"]], optional): The mode to optimize the score. Defaults to None.
-            eval_on (Optional[Union[Literal["train"], DataLoader]], optional): DataLoader containing evaluation data. Defaults to None.
-        """
-        self.model.fit_readout(
-            train_loader=train_loader,
-            l2_value=l2_value,
-            score_fn=score_fn,
-            mode=mode,
-            eval_on=eval_on,
-        )
+            for x, y in train_loader:
+                self.model(x)
+
+            if criterion is None:
+                return []
+
+            if metrics is None:
+                metrics = {}
+            metrics.update({"loss": lambda x, y: criterion(x, y).item()})
+            train_metrics = {f"train_{k}": m for k, m in metrics.items()}
+            metrics_results = self.evaluate(train_loader, train_metrics)
+            if valid_loader is not None:
+                eval_metrics = self.evaluate(valid_loader, metrics)
+                metrics_results.update(eval_metrics)
+            return [metrics_results]
 
     def build_fn(self) -> Module:
         return EchoStateNetwork(
