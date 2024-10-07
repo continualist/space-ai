@@ -12,7 +12,7 @@ from torch import optim
 
 
 def main():
-    benchmark = NASABenchmark("nasa", "experiments", 250, "datasets")
+    benchmark = NASABenchmark("nasa_lstm", "experiments", 250, "datasets")
     
     for i, channel_id in enumerate(NASA.channel_ids):
         print(f'{i+1}/{len(NASA.channel_ids)}: {channel_id}')
@@ -24,7 +24,7 @@ def main():
         low_perc, high_perc = np.percentile(y_test, [5, 95])
         volatility = np.std(y_test)
 
-        detector = Telemanom(low_perc, high_perc, volatility, pruning_factor=0.12)
+        detector = Telemanom(low_perc, high_perc, volatility, pruning_factor=0.13)
         predictor = LSTM(nasa_channel.in_features_size, [80, 80], 1, 0.3)
         predictor.build()
 
@@ -41,7 +41,7 @@ def main():
                 batch_size=64,
             ),
             overlapping_train=True,
-            # restore_predictor=True,
+            restore_predictor=True,
         )
         
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
