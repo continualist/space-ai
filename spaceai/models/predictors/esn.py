@@ -29,6 +29,7 @@ class ESN(SequenceModel):
         input_size: int,
         layers: List[int],
         output_size: int,
+        reduce_out: Optional[Literal["first", "mean"]] = None,
         arch_type: Literal["stacked", "multi"] = "stacked",
         activation: str = "tanh",
         leakage: float = 1.0,
@@ -40,6 +41,7 @@ class ESN(SequenceModel):
         net_gain_and_bias: bool = False,
         gradient_based: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
+        return_sequences: bool = True,
         stateful: bool = False,
     ):
         """Initialize the ESN model.
@@ -64,6 +66,7 @@ class ESN(SequenceModel):
         self.input_size: int = input_size
         self.layers: List[int] = layers
         self.output_size: int = output_size
+        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.arch_type: Literal["stacked", "multi"] = arch_type
         self.activation: str = activation
         self.leakage: float = leakage
@@ -71,6 +74,7 @@ class ESN(SequenceModel):
         self.rho: float = rho
         self.bias: bool = bias
         self.gradient_based: bool = gradient_based
+        self.return_sequences: bool = return_sequences
         self.kernel_initializer: Union[str, Callable[[Size], Tensor]] = (
             kernel_initializer
         )
@@ -102,7 +106,15 @@ class ESN(SequenceModel):
                 [s[-1] for s in self.state] if self.state is not None else None,
                 return_states=True,
             )
-        return pred
+
+        if self.reduce_out is None:
+            return pred
+        elif self.reduce_out == "mean":
+            return pred.mean(dim=-1)
+        elif self.reduce_out == "first":
+            return pred[..., 0]
+
+        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
     def fit(  # type: ignore[override]
         self,

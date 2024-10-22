@@ -12,20 +12,34 @@ from torch import optim
 
 
 def main():
-    benchmark = NASABenchmark("nasa_esn", "experiments", 250, "datasets")
+    n_predictions = 10
+    reduce_out = "mean"
+    benchmark = NASABenchmark(
+        run_id="nasa_esn", 
+        exp_dir="experiments", 
+        seq_length=250, 
+        n_predictions=n_predictions,
+        data_root="datasets",
+    )
     
     for i, channel_id in enumerate(NASA.channel_ids):
         print(f'{i+1}/{len(NASA.channel_ids)}: {channel_id}')
 
         nasa_channel = NASA(
-            "datasets", channel_id, mode="anomaly", train=False
+            "datasets", 
+            channel_id, 
+            mode="anomaly", 
+            train=False, 
         )
-        y_test = nasa_channel.data[nasa_channel.window_size - 1:, 0]
-        low_perc, high_perc = np.percentile(y_test, [5, 95])
-        volatility = np.std(y_test)
 
-        detector = Telemanom(low_perc, high_perc, volatility, pruning_factor=0.13)
-        predictor = ESN(nasa_channel.in_features_size, [80, 80], 1, gradient_based=False)
+        detector = Telemanom(pruning_factor=0.13)
+        predictor = ESN(
+            nasa_channel.in_features_size, 
+            [80, 80], 
+            n_predictions,
+            reduce_out=reduce_out,
+            gradient_based=False,
+        )
         predictor.build()
 
         benchmark.run(
@@ -34,28 +48,34 @@ def main():
             detector,
             fit_predictor_args=dict(
                 criterion=nn.MSELoss(),
+                # optimizer=optim.Adam(predictor.model.parameters(), lr=0.001),
+                # epochs=35,
+                # patience_before_stopping=10,
+                # min_delta=0.0003,
+                # batch_size=64,
             ),
             overlapping_train=True,
-            restore_predictor=True,
+            # restore_predictor=True,
         )
         
-    results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
-    tp = results_df['true_positives'].sum()
-    fp = results_df['false_positives'].sum()
-    fn = results_df['false_negatives'].sum()
+        results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
+        tp = results_df['true_positives'].sum()
+        fp = results_df['false_positives'].sum()
+        fn = results_df['false_negatives'].sum()
 
-    total_precision = tp / (tp + fp)
-    total_recall = tp / (tp + fn)
-    total_f1 = 2 * (total_precision * total_recall) / \
-        (total_precision + total_recall)
-    
-    print("True Positives: ", tp)
-    print("False Positives: ", fp)
-    print("False Negatives: ", fn)
-    print("Total Precision: ", total_precision)
-    print("Total Recall: ", total_recall)
-    print("Total F1: ", total_f1)
+        total_precision = tp / (tp + fp)
+        total_recall = tp / (tp + fn)
+        total_f1 = 2 * (total_precision * total_recall) / \
+            (total_precision + total_recall)
+        
+        print("True Positives: ", tp)
+        print("False Positives: ", fp)
+        print("False Negatives: ", fn)
+        print("Total Precision: ", total_precision)
+        print("Total Recall: ", total_recall)
+        print("Total F1: ", total_f1)
 
 
 if __name__ == "__main__":
+
     main()

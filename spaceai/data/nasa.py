@@ -127,6 +127,7 @@ class NASA(AnomalyDataset):
         mode: Literal["prediction", "anomaly"],
         overlapping: bool = False,
         seq_length: Optional[int] = 250,
+        n_predictions: int = 1,
         train: bool = True,
         download: bool = True,
         drop_last: bool = True,
@@ -150,6 +151,7 @@ class NASA(AnomalyDataset):
         self.window_size: int = seq_length if seq_length else 250
         self.train: bool = train
         self.drop_last: bool = drop_last
+        self.n_predictions: int = n_predictions
 
         if not channel_id in self.channel_ids:
             raise ValueError(f"Channel ID {channel_id} is not valid")
@@ -177,25 +179,37 @@ class NASA(AnomalyDataset):
         """Return the data at the given index."""
         if index < 0 or index >= len(self):
             raise IndexError(f"Index {index} out of bounds")
-        first_idx = index if self.overlapping else index * self.window_size
-        last_idx = first_idx + self.window_size + 1
+        first_idx = (
+            index
+            if self.overlapping
+            else index * (self.window_size + self.n_predictions - 1)
+        )
+        last_idx = first_idx + self.window_size + self.n_predictions
         if last_idx > len(self.data):
             last_idx = len(self.data)
 
         x, y_true = (
-            torch.tensor(self.data[first_idx : last_idx - 1]),
-            torch.tensor(self.data[first_idx + 1 : last_idx, 0]),
+            torch.tensor(self.data[first_idx : last_idx - self.n_predictions]),
+            torch.tensor(
+                [
+                    self.data[
+                        first_idx + i + 1 : last_idx - self.n_predictions + i + 1, 0
+                    ]
+                    for i in range(self.n_predictions)
+                ]
+            ).T,
         )
-        return x, y_true.unsqueeze(1)
+
+        return x, y_true
 
     def __len__(self) -> int:
-        length = self.data.shape[0] - self.window_size
         if self.overlapping:
+            length = self.data.shape[0] - self.window_size - self.n_predictions + 1
             return length
-        length = math.ceil(length / self.window_size)
+        length = self.data.shape[0] / (self.window_size + self.n_predictions)
         if self.drop_last:
-            return length
-        return length + 1
+            return math.floor(length)
+        return math.ceil(length)
 
     def _check_exists(self) -> bool:
         """Check if the dataset exists on the local filesystem."""
