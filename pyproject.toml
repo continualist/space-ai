@@ -16,6 +16,7 @@ more-itertools = "^10.3.0"
 tqdm = "^4.66.5"
 datetime = "^5.5"
 requests = "^2.32.3"
+psutil = "^6.1.0"
 
 [tool.poetry.group.dev]
 optional = true
