@@ -10,7 +10,7 @@ Run the following commands within your python virtual environment:
 ```sh
 pip install poetry
 
-git clone https://github.com/GeremiaPompei/torch-rc@fix/reservoir_fix
+git clone https://github.com/vdecaro/torch-rc
 cd torch-rc
 poetry install
 cd ..
