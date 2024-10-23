@@ -279,16 +279,10 @@ class NASABenchmark(Benchmark):
             np.delete(true_anomalies, matched_true_seqs, axis=0)
         )
 
-        results["precision"] = (
-            results["true_positives"] / results["n_detected"]
-            if results["n_detected"] > 0
-            else 0
-        )
-        results["recall"] = (
-            results["true_positives"] / results["n_anomalies"]
-            if results["n_anomalies"] > 0
-            else 0
-        )
+        tpfp = results["true_positives"] + results["false_positives"]
+        results["precision"] = results["true_positives"] / tpfp if tpfp > 0 else 1
+        tpfn = results["true_positives"] + results["false_negatives"]
+        results["recall"] = results["true_positives"] / tpfn if tpfn > 0 else 1
         results["f1"] = (
             (
                 2
