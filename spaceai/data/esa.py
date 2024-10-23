@@ -4,7 +4,6 @@ import math
 import os
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import (
     Literal,
     Optional,
@@ -169,19 +168,6 @@ class ESA(
         if not channel_id in self.mission.all_channels:
             raise ValueError(f"Channel ID {channel_id} is not valid")
 
-        train_test_label = "train" if train else "test"
-        self.preprocessed_channel_filepath = Path(
-            os.path.abspath(
-                os.path.join(
-                    self.root,
-                    "preprocessed",
-                    mission.dirname,
-                    f"{channel_id}_{train_test_label}.csv",
-                )
-            )
-        )
-        os.makedirs(os.path.dirname(self.preprocessed_channel_filepath), exist_ok=True)
-
         if download:
             self.download()
 
@@ -212,12 +198,9 @@ class ESA(
 
         x, y_true = (
             torch.tensor(self.data[first_idx : last_idx - 1]),
-            torch.tensor(self.data[first_idx + 1 : last_idx]),
+            torch.tensor(self.data[first_idx + 1 : last_idx, 0]),
         )
-        if self._mode == "prediction":
-            return x.unsqueeze(1), y_true.unsqueeze(1)
-        anomalies = torch.tensor(self.anomalies[first_idx + 1 : last_idx]).int()
-        return x.unsqueeze(1), y_true.unsqueeze(1), anomalies.unsqueeze(1)
+        return x, y_true.unsqueeze(1)
 
     def __len__(self) -> int:
         length = self.data.shape[0] - self.window_size
@@ -279,90 +262,6 @@ class ESA(
         final_param_df.iloc[0] = channel_df.iloc[0]
         return final_param_df
 
-    def _load_parameter_dataset_(
-        self,
-        filepath: str,
-        channel_id: str,
-        labels_df: pd.DataFrame,
-        anomaly_types_df: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """Load and preprocess the parameter dataset.
-
-        Args:
-            filepath (str): The path to the parameter dataset.
-            channel_id (str): The channel ID.
-            labels_df (pd.DataFrame): The labels dataframe.
-            anomaly_types_df (pd.DataFrame): The anomaly types dataframe.
-
-        Returns:
-            pd.DataFrame: The preprocessed parameter dataset.
-        """
-        channel_df = pd.read_pickle(filepath)
-        channel_df["label"] = np.uint8(0)
-        channel_df = channel_df.rename(columns={channel_id: "value"})
-
-        # Take derivative of monotonic channels - part of preprocessing
-        min_ch, max_ch = self.mission.monotonic_channel_range
-        if min_ch <= int(channel_id.split("_")[1]) <= max_ch:
-            channel_df.value = np.diff(
-                channel_df.value, append=channel_df.value.iloc[-1]
-            )
-
-        # Change string values to categorical integers
-        if channel_df["value"].dtype == "O":
-            channel_df["value"] = pd.factorize(channel_df["value"])[0]
-
-        # Fill labels
-        for _, row in labels_df.iterrows():
-            if row["Channel"] == channel_id:
-                anomaly_type = anomaly_types_df.loc[
-                    anomaly_types_df["ID"] == row["ID"]
-                ]["Category"].values[0]
-                if anomaly_type == "Anomaly":
-                    label_value = AnnotationLabel.ANOMALY.value
-                elif anomaly_type == "Rare Event":
-                    label_value = AnnotationLabel.RARE_EVENT.value
-                elif anomaly_type == "Communication Gap":
-                    label_value = AnnotationLabel.GAP.value
-                else:
-                    label_value = AnnotationLabel.INVALID.value
-                end_time = pd.Timestamp(row["EndTime"]).ceil(
-                    freq=self.mission.resampling_rule
-                )
-                channel_df.loc[row["StartTime"] : end_time, "label"] = label_value
-        return channel_df
-
-    def _load_telecommand_dataset_(
-        self, filepath: str, channel_id: str
-    ) -> pd.DataFrame:
-        """Load and preprocess the telecommand dataset.
-
-        Args:
-            filepath (str): The path to the telecommand dataset.
-            channel_id (str): The channel ID.
-
-        Returns:
-            pd.DataFrame: The preprocessed telecommand dataset.
-        """
-        channel_df = pd.read_pickle(filepath)
-        channel_df["label"] = np.uint8(0)
-        channel_df = channel_df.rename(columns={channel_id: "value"})
-        channel_df.index = pd.to_datetime(channel_df.index)
-        channel_df = channel_df[~channel_df.index.duplicated()]
-
-        # Encode telecommands as 0-1 peaks ensuring that they are not removed after resampling
-        original_timestamps = channel_df.index.copy()
-        for timestamp in original_timestamps:
-            timestamp_before = timestamp - self.mission.resampling_rule
-            if len(channel_df.loc[timestamp_before:timestamp]) == 1:
-                channel_df.loc[timestamp_before] = 0
-                channel_df = channel_df.sort_index()
-            timestamp_after = timestamp + self.mission.resampling_rule
-            if len(channel_df.loc[timestamp:timestamp_after]) == 1:
-                channel_df.loc[timestamp_after] = 0
-                channel_df = channel_df.sort_index()
-        return channel_df
-
     def load_and_preprocess(
         self,
         channel_id: str,
@@ -377,43 +276,54 @@ class ESA(
         """
         source_folder = os.path.join(self.root, self.mission.inner_dirpath)
 
+        # Load and format parameter (channel)
+        if channel_id in self.mission.parameters:
+            channel_df = pd.read_pickle(
+                os.path.join(source_folder, "channels", f"{channel_id}.zip")
+            )
+
+        # Load and format telecommand
+        if channel_id in self.mission.telecommands:
+            channel_df = pd.read_pickle(
+                os.path.join(source_folder, "telecommands", f"{channel_id}.zip"),
+            )
+
+        channel_df = self._apply_resampling_rule_(
+            channel_df,
+            channel_df.index[0],
+            channel_df.index[-1],
+        )
+
+        channel_df = channel_df.ffill().bfill().astype(np.float32)
+
         # Load dataframes from files of raw dataset
+        map_datetime_index = pd.DataFrame(
+            list(range(0, len(channel_df))), index=channel_df.index, columns=["value"]
+        )
+        min_dt, max_dt = channel_df.index.min(), channel_df.index.max()
         labels_df = pd.read_csv(os.path.join(source_folder, "labels.csv"))
         for dcol in ["StartTime", "EndTime"]:
             labels_df[dcol] = pd.to_datetime(labels_df[dcol]).dt.tz_localize(None)
+        labels_df = labels_df.loc[labels_df["Channel"] == channel_id]
+        anomalies = []
+        for _, label_row in labels_df.iterrows():
+            start_time = label_row["StartTime"].floor(freq=self.mission.resampling_rule)
+            end_time = label_row["EndTime"].ceil(freq=self.mission.resampling_rule)
+            if end_time < min_dt:
+                continue
+            if start_time > max_dt:
+                continue
 
-        anomaly_types_df = pd.read_csv(os.path.join(source_folder, "anomaly_types.csv"))
-
-        if not self.preprocessed_channel_filepath.exists():
-            # Load and format parameter (channel)
-            if channel_id in self.mission.parameters:
-                channel_df = self._load_parameter_dataset_(
-                    os.path.join(source_folder, "channels", f"{channel_id}.zip"),
-                    channel_id=channel_id,
-                    labels_df=labels_df,
-                    anomaly_types_df=anomaly_types_df,
+            map_datetime_index_range = map_datetime_index[
+                np.logical_and(
+                    start_time <= map_datetime_index.index,
+                    map_datetime_index.index <= end_time,
                 )
+            ]
+            start_idx = map_datetime_index_range.iloc[0]["value"]
+            end_idx = map_datetime_index_range.iloc[-1]["value"]
+            anomalies.append((start_idx, end_idx))
 
-            # Load and format telecommand
-            if channel_id in self.mission.telecommands:
-                channel_df = self._load_telecommand_dataset_(
-                    os.path.join(source_folder, "telecommands", f"{channel_id}.zip"),
-                    channel_id=channel_id,
-                )
-
-            channel_df = self._apply_resampling_rule_(
-                channel_df,
-                channel_df.index[0],
-                channel_df.index[-1],
-            )
-
-            channel_df["value"] = channel_df["value"].ffill().bfill().astype(np.float32)
-            channel_df["label"] = channel_df["label"].ffill().bfill().astype(np.uint8)
-            channel_df.to_csv(self.preprocessed_channel_filepath, lineterminator="\n")
-        else:
-            with open(self.preprocessed_channel_filepath, encoding="utf-8") as fp:
-                channel_df = pd.read_csv(fp, index_col=0)
-                channel_df.index = pd.to_datetime(channel_df.index)
         if self.uniform_start_end_date:
             channel_df = self._apply_resampling_rule_(
                 channel_df,
@@ -421,6 +331,11 @@ class ESA(
                 self.mission.end_date,
             )
 
-        return channel_df["value"].values.astype(np.float32), channel_df[
-            "label"
-        ].values.astype(np.uint8)
+        channel = channel_df.values.astype(np.float32)
+
+        return channel, anomalies
+
+    @property
+    def in_features_size(self) -> str:
+        """Return the size of the input features."""
+        return self.data.shape[-1]
