@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 from typing import (
@@ -37,6 +38,7 @@ class NASABenchmark(Benchmark):
         run_id: str,
         exp_dir: str,
         seq_length: int = 250,
+        n_predictions: int = 1,
         data_root: str = "data/nasa",
     ):
         """Initializes a new NASA benchmark run.
@@ -50,6 +52,7 @@ class NASABenchmark(Benchmark):
         super().__init__(run_id, exp_dir)
         self.data_root: str = data_root
         self.seq_length: int = seq_length
+        self.n_predictions: int = n_predictions
         self.all_results: List[Dict[str, Any]] = []
 
     def run(
@@ -140,26 +143,24 @@ class NASABenchmark(Benchmark):
         print(f"Predicting the test data for channel {channel_id}...")
         test_loader = DataLoader(
             test_channel,
-            batch_size=1,
+            batch_size=batch_size,
             shuffle=False,
-            collate_fn=data.seq_collate_fn(n_inputs=2, mode="time"),
+            collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
         )
         results["predict_memory_start"] = get_memory_rss()
         t1 = time.time()
-        predictor.stateful = True
         y_pred, y_trg = zip(
             *[
                 (
-                    predictor(x).detach().squeeze().cpu().numpy(),
-                    y.detach().squeeze().cpu().numpy(),
+                    predictor(x).detach().cpu().numpy()[-1],
+                    y.detach().cpu().numpy()[-1, ..., 0],
                 )
                 for x, y in tqdm(test_loader, desc="Predicting")
             ]
         )
-        y_pred, y_trg = [
-            np.concatenate(seq)[test_channel.window_size - 1 :]
-            for seq in [y_pred, y_trg]
-        ]
+        y_pred, y_trg = [np.concatenate(seq) for seq in [y_pred, y_trg]]
+        np.save(f"y_pred/{channel_id}.npy", y_pred)
+        np.save(f"y_trg/{channel_id}.npy", y_trg)
         t2 = time.time()
         results["predict_memory_end"] = get_memory_rss()
         results["predict_time"] = t2 - t1
@@ -179,6 +180,13 @@ class NASABenchmark(Benchmark):
 
         true_anomalies = test_channel.anomalies
 
+        json.dump(
+            {
+                "true": true_anomalies,
+                "pred": pred_anomalies,
+            },
+            open(f"y_anomalies/{channel_id}.json", "w"),
+        )
         classification_results = self.compute_classification_metrics(
             true_anomalies, pred_anomalies
         )
@@ -216,16 +224,18 @@ class NASABenchmark(Benchmark):
             mode="prediction",
             overlapping=overlapping_train,
             seq_length=self.seq_length,
+            n_predictions=self.n_predictions,
         )
 
         test_channel = NASA(
             root=self.data_root,
             channel_id=channel_id,
             mode="anomaly",
-            overlapping=False,
+            overlapping=overlapping_train,
             seq_length=self.seq_length,
             train=False,
             drop_last=False,
+            n_predictions=self.n_predictions,
         )
 
         return train_channel, test_channel

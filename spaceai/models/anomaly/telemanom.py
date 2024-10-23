@@ -27,9 +27,6 @@ class Telemanom(ErrorBasedDetector):
 
     def __init__(
         self,
-        low_perc: float,
-        high_perc: float,
-        channel_volatility: float,
         window_size: int = 2100,
         n_eval_per_window: int = 70,
         smoothing_perc: float = 0.05,
@@ -44,12 +41,6 @@ class Telemanom(ErrorBasedDetector):
         """Batch processing of errors between actual and predicted values for a channel.
 
         Args:
-            low_perc (float): lower percentile for channel values. We suggest setting
-                this parameter by using `np.percentile(y_test, 5)`.
-            high_perc (float): upper percentile for channel values. We suggest setting
-                this parameter by using `np.percentile(y_test, 95)`.
-            channel_volatility (float): standard deviation of channel values. We suggest
-                setting this parameter by using `np.std(y_test)`.
             window_size (int): size of the window of errors employed for the evaluation.
             n_eval_per_window (int): actual number of points to evaluate in every window.
                 This parameter identifies the last `n_eval_per_window` points in the
@@ -78,8 +69,6 @@ class Telemanom(ErrorBasedDetector):
         """
         if error_offset < 0:
             raise ValueError("error_offset must be greater than or equal to 0")
-        if low_perc > high_perc:
-            raise ValueError("low_perc must be less than high_perc")
         if pruning_factor < 0 or pruning_factor > 1:
             raise ValueError("pruning_factor must be between 0 and 1")
 
@@ -87,10 +76,6 @@ class Telemanom(ErrorBasedDetector):
         self._n_eval: int = n_eval_per_window
         self.smoothing_perc = smoothing_perc
         self.e_buf: int = error_offset
-        self.perc_low: float = low_perc
-        self.perc_high: float = high_perc
-        self.inter_range: float = self.perc_high - self.perc_low
-        self.sd_values: float = channel_volatility
         self.pred_buffer: int = pred_buffer
         self.ignore_first_n_factor: float = ignore_first_n_factor
         self.p: float = pruning_factor
@@ -174,12 +159,14 @@ class Telemanom(ErrorBasedDetector):
 
             # We updated the window and it is at its capacity
             if len(self.window) == self.window_size and moved:
-                window_i_anom = self.process_window()
+                window_i_anom = self.process_window(
+                    y_true[prior_idx : prior_idx + self.window_size]
+                )
                 i_anom = np.concatenate([i_anom, window_i_anom + prior_idx])
                 prior_idx += self._n_eval
                 self.n_window += 1
 
-        e_seqs = np.array([])
+        e_seqs = []
         if len(i_anom) > 0:
             groups = [list(group) for group in mit.consecutive_groups(i_anom)]
             e_seqs = [(int(g[0]), int(g[-1])) for g in groups if not g[0] == g[-1]]
@@ -191,7 +178,7 @@ class Telemanom(ErrorBasedDetector):
 
         return e_seqs
 
-    def process_window(self) -> np.ndarray:
+    def process_window(self, y_test) -> np.ndarray:
         """Process the window of errors and identify the anomalies.
 
         Returns:
@@ -207,9 +194,11 @@ class Telemanom(ErrorBasedDetector):
         _, epsilon_inv = self.find_epsilon(e_s_inv, mean_e_s, sd_e_s)
 
         # Finding the anomalies by comparing the optimal epsilon found
-        i_anom, e_seq, non_anom_max = self.compare_to_epsilon(e_s, epsilon, sd_e_s)
+        i_anom, e_seq, non_anom_max = self.compare_to_epsilon(
+            e_s, epsilon, sd_e_s, y_test
+        )
         i_anom_inv, e_seq_inv, non_anom_max_inv = self.compare_to_epsilon(
-            e_s_inv, epsilon_inv, sd_e_s
+            e_s_inv, epsilon_inv, sd_e_s, y_test
         )
 
         if len(i_anom) == 0 and len(i_anom_inv) == 0:
@@ -285,7 +274,7 @@ class Telemanom(ErrorBasedDetector):
         return sd_threshold, epsilon
 
     def compare_to_epsilon(
-        self, e_s: np.ndarray, epsilon: float, sd_e_s: float
+        self, e_s: np.ndarray, epsilon: float, sd_e_s: float, y_test: np.array
     ) -> Tuple[np.ndarray, List[Tuple[int, int]], float]:
         """Compare smoothed error values to epsilon (error threshold) and group
         consecutive errors together into sequences.
@@ -301,19 +290,17 @@ class Telemanom(ErrorBasedDetector):
         """
 
         # Check: scale of errors compared to values too small?
+        low_perc, high_perc = np.percentile(y_test, [5, 95])
+        inter_range = high_perc - low_perc
+        sd_values = np.std(y_test)
         max_error = max(e_s)
         if (
-            not (
-                sd_e_s > (0.05 * self.sd_values)
-                or max_error > (0.05 * self.inter_range)
-            )
+            not (sd_e_s > (0.05 * sd_values) or max_error > (0.05 * inter_range))
             or not max_error > 0.05
         ):
             return np.array([]), [], float("-inf")
 
-        i_anom = np.argwhere(
-            (e_s >= epsilon) & (e_s > 0.05 * self.inter_range)
-        ).flatten()
+        i_anom = np.argwhere((e_s >= epsilon) & (e_s > 0.05 * inter_range)).flatten()
 
         if len(i_anom) == 0:
             return np.array([]), [], float("-inf")
