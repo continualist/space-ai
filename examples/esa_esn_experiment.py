@@ -11,7 +11,7 @@ from torch import nn
 
 
 def main():
-    benchmark = ESABenchmark("esa", "experiments", 250, "datasets")
+    benchmark = ESABenchmark("esa_esn", "experiments", 250, "datasets")
     for mission_wrapper in ESAMissions:
         mission = mission_wrapper.value
         for channel_id in mission.target_channels:
