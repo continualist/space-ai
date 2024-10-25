@@ -4,18 +4,17 @@ import pandas as pd
 from spaceai.data import ESA, ESAMissions
 from spaceai.benchmark import ESABenchmark
 from spaceai.models.anomaly import Telemanom
-from spaceai.models.predictors import LSTM
+from spaceai.models.predictors import ESN
 
 import numpy as np
-from torch import nn
-from torch import optim
+from torch import nn, optim
 
 from spaceai.utils.callbacks import SystemMonitorCallback
 
 
 def main():
     benchmark = ESABenchmark(
-        run_id="esa_lstm",
+        run_id="esa_esn",
         exp_dir="experiments",
         seq_length=250,
         n_predictions=10,
@@ -26,20 +25,16 @@ def main():
         mission = mission_wrapper.value
         for channel_id in mission.target_channels:
             esa_channel = ESA(
-                "datasets", 
-                mission, 
-                channel_id, 
-                mode="anomaly", 
-                train=False
+                "datasets", mission, channel_id, mode="anomaly", train=False
             )
 
             detector = Telemanom(pruning_factor=0.13)
-            predictor = LSTM(
+            predictor = ESN(
                 esa_channel.in_features_size, 
                 [80, 80], 
-                10, 
-                reduce_out="first",
-                dropout=0.3,
+                10,
+                reduce_out="mean",
+                gradient_based=True,
                 stateful=True,
             )
             predictor.build()
@@ -51,7 +46,8 @@ def main():
                 detector,
                 fit_predictor_args=dict(
                     criterion=nn.MSELoss(),
-                    optimizer=optim.Adam(predictor.model.parameters(), lr=0.001),
+                    optimizer=optim.Adam(
+                        predictor.model.parameters(), lr=0.001),
                     epochs=35,
                     patience_before_stopping=10,
                     min_delta=0.0003,
