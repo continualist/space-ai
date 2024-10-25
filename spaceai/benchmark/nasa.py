@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import time
 from typing import (
@@ -159,8 +158,6 @@ class NASABenchmark(Benchmark):
             ]
         )
         y_pred, y_trg = [np.concatenate(seq) for seq in [y_pred, y_trg]]
-        np.save(f"y_pred/{channel_id}.npy", y_pred)
-        np.save(f"y_trg/{channel_id}.npy", y_trg)
         t2 = time.time()
         results["predict_memory_end"] = get_memory_rss()
         results["predict_time"] = t2 - t1
@@ -173,6 +170,7 @@ class NASABenchmark(Benchmark):
         results["detect_memory_start"] = get_memory_rss()
         t1 = time.time()
         pred_anomalies = detector.detect_anomalies(y_pred, y_trg)
+        pred_anomalies += detector.flush_detector()
         t2 = time.time()
         results["detect_memory_end"] = get_memory_rss()
         results["detect_time"] = t2 - t1
@@ -180,13 +178,6 @@ class NASABenchmark(Benchmark):
 
         true_anomalies = test_channel.anomalies
 
-        json.dump(
-            {
-                "true": true_anomalies,
-                "pred": pred_anomalies,
-            },
-            open(f"y_anomalies/{channel_id}.json", "w"),
-        )
         classification_results = self.compute_classification_metrics(
             true_anomalies, pred_anomalies
         )
@@ -231,7 +222,7 @@ class NASABenchmark(Benchmark):
             root=self.data_root,
             channel_id=channel_id,
             mode="anomaly",
-            overlapping=overlapping_train,
+            overlapping=True,
             seq_length=self.seq_length,
             train=False,
             drop_last=False,
