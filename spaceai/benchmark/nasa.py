@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -21,11 +20,16 @@ from tqdm import tqdm
 
 from spaceai.data import NASA
 from spaceai.utils import data
-from spaceai.utils.tools import get_memory_rss
+from spaceai.utils.callbacks import (
+    Callback,
+    CallbackHandler,
+)
 
 if TYPE_CHECKING:
     from spaceai.models.predictors import SequenceModel
     from spaceai.models.anomaly import AnomalyDetector
+
+import logging
 
 from .benchmark import Benchmark
 
@@ -63,6 +67,8 @@ class NASABenchmark(Benchmark):
         perc_eval: Optional[float] = 0.2,
         restore_predictor: bool = False,
         overlapping_train: bool = True,
+        callbacks: Optional[List[Callback]] = None,
+        call_every_ms: int = 100,
     ):
         """Runs the benchmark for a given channel.
 
@@ -74,7 +80,13 @@ class NASABenchmark(Benchmark):
             perc_eval (Optional[float]): the percentage of the training data to be used for evaluation
             restore_predictor (bool): whether to restore the predictor from a previous run
             overlapping_train (bool): whether to use overlapping sequences for training
+            callbacks (Optional[List[Callback]]): a list of callbacks to be used during benchmark
+            call_every_ms (int): the interval at which the callbacks are called
         """
+        callback_handler = CallbackHandler(
+            callbacks=callbacks if callbacks is not None else [],
+            call_every_ms=call_every_ms,
+        )
         train_channel, test_channel = self.load_channel(
             channel_id, overlapping_train=overlapping_train
         )
@@ -86,11 +98,11 @@ class NASABenchmark(Benchmark):
             os.path.exists(os.path.join(self.run_dir, f"predictor-{channel_id}.pt"))
             and restore_predictor
         ):
-            print(f"Restoring predictor for channel {channel_id}...")
+            logging.info(f"Restoring predictor for channel {channel_id}...")
             predictor.load(os.path.join(self.run_dir, f"predictor-{channel_id}.pt"))
 
         elif fit_predictor_args is not None:
-            print(f"Fitting the predictor for channel {channel_id}...")
+            logging.info(f"Fitting the predictor for channel {channel_id}...")
             # Training the predictor
             batch_size = fit_predictor_args.pop("batch_size", 64)
             eval_channel = None
@@ -117,18 +129,24 @@ class NASABenchmark(Benchmark):
                 if eval_channel is not None
                 else None
             )
-            results["train_memory_start"] = get_memory_rss()
-            t1 = time.time()
+            callback_handler.start()
             predictor.stateful = False
             train_history = predictor.fit(
                 train_loader=train_loader,
                 valid_loader=eval_loader,
                 **fit_predictor_args,
             )
-            t2 = time.time()
-            results["train_memory_end"] = get_memory_rss()
-            results["train_time"] = t2 - t1
-            print("Training time on channel", channel_id, ":", results["train_time"])
+            callback_handler.stop()
+            results.update(
+                {
+                    f"train_{k}": v
+                    for k, v in callback_handler.collect(reset=True).items()
+                }
+            )
+
+            logging.info(
+                "Training time on channel", channel_id, ":", results["train_time"]
+            )
             train_history = pd.DataFrame.from_records(train_history).to_csv(
                 os.path.join(self.run_dir, f"train_history-{channel_id}.csv"),
                 index=False,
@@ -139,42 +157,54 @@ class NASABenchmark(Benchmark):
 
         if predictor.model is not None:
             predictor.model.eval()
-        print(f"Predicting the test data for channel {channel_id}...")
+        logging.info(f"Predicting the test data for channel {channel_id}...")
         test_loader = DataLoader(
             test_channel,
-            batch_size=batch_size,
+            batch_size=1,
             shuffle=False,
-            collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
+            collate_fn=data.seq_collate_fn(n_inputs=2, mode="time"),
         )
-        results["predict_memory_start"] = get_memory_rss()
-        t1 = time.time()
+        callback_handler.start()
+        predictor.stateful = True
         y_pred, y_trg = zip(
             *[
                 (
-                    predictor(x).detach().cpu().numpy()[-1],
-                    y.detach().cpu().numpy()[-1, ..., 0],
+                    predictor(x).detach().cpu().squeeze().numpy(),
+                    y.detach().cpu().squeeze().numpy(),
                 )
                 for x, y in tqdm(test_loader, desc="Predicting")
             ]
         )
-        y_pred, y_trg = [np.concatenate(seq) for seq in [y_pred, y_trg]]
-        t2 = time.time()
-        results["predict_memory_end"] = get_memory_rss()
-        results["predict_time"] = t2 - t1
+        y_pred, y_trg = [
+            np.concatenate(seq)[test_channel.window_size - 1 :]
+            for seq in [y_pred, y_trg]
+        ]
+        callback_handler.stop()
+        results.update(
+            {f"predict_{k}": v for k, v in callback_handler.collect(reset=True).items()}
+        )
         results["test_loss"] = np.mean(((y_pred - y_trg) ** 2))  # type: ignore[operator]
-        print("Test loss for channel", channel_id, ":", results["test_loss"])
-        print("Prediction time for channel", channel_id, ":", results["predict_time"])
+        logging.info(f"Test loss for channel {channel_id}: {results['test_loss']}")
+        logging.info(
+            f"Prediction time for channel {channel_id}: {results['predict_time']}"
+        )
 
         # Testing the detector
-        print("Detecting anomalies for channel", channel_id)
-        results["detect_memory_start"] = get_memory_rss()
-        t1 = time.time()
+        logging.info(f"Detecting anomalies for channel {channel_id}")
+        callback_handler.start()
+        if len(y_trg) < 2500:
+            detector.ignore_first_n_factor = 1
+        if len(y_trg) < 1800:
+            detector.ignore_first_n_factor = 0
         pred_anomalies = detector.detect_anomalies(y_pred, y_trg)
         pred_anomalies += detector.flush_detector()
-        t2 = time.time()
-        results["detect_memory_end"] = get_memory_rss()
-        results["detect_time"] = t2 - t1
-        print("Detection time for channel", channel_id, ":", results["detect_time"])
+        callback_handler.stop()
+        results.update(
+            {f"detect_{k}": v for k, v in callback_handler.collect(reset=True).items()}
+        )
+        logging.info(
+            f"Detection time for channel {channel_id}: {results['detect_time']}"
+        )
 
         true_anomalies = test_channel.anomalies
 
@@ -187,15 +217,13 @@ class NASABenchmark(Benchmark):
             if eval_loader is not None:
                 results["eval_loss"] = train_history[-1]["loss_eval"]
 
-        print("Results for channel", channel_id)
-        print(results)
+        logging.info(f"Results for channel {channel_id}")
 
         self.all_results.append(results)
 
-        df = pd.DataFrame.from_records(self.all_results).to_csv(
+        pd.DataFrame.from_records(self.all_results).to_csv(
             os.path.join(self.run_dir, "results.csv"), index=False
         )
-        print(df)
 
     def load_channel(
         self, channel_id: str, overlapping_train: bool = True
@@ -222,11 +250,11 @@ class NASABenchmark(Benchmark):
             root=self.data_root,
             channel_id=channel_id,
             mode="anomaly",
-            overlapping=True,
+            overlapping=False,
             seq_length=self.seq_length,
             train=False,
             drop_last=False,
-            n_predictions=self.n_predictions,
+            n_predictions=1,
         )
 
         return train_channel, test_channel
