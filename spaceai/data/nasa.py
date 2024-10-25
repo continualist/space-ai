@@ -190,11 +190,13 @@ class NASA(AnomalyDataset):
 
         x, y_true = (
             torch.tensor(self.data[first_idx:last_idx]),
-            torch.tensor(
-                [
-                    self.data[first_idx + i + 1 : last_idx + i + 1, 0]
-                    for i in range(self.n_predictions)
-                ]
+            torch.from_numpy(
+                np.stack(
+                    [
+                        self.data[first_idx + i + 1 : last_idx + i + 1, 0]
+                        for i in range(self.n_predictions)
+                    ]
+                )
             ).T,
         )
         return x, y_true
