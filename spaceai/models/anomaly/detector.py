@@ -69,6 +69,9 @@ class AnomalyDetector:
     ) -> np.ndarray:
         raise NotImplementedError
 
+    def flush_detector(self) -> Optional[np.ndarray]:
+        raise NotImplementedError
+
     def evaluate_anomalies(
         self, y_pred: np.ndarray, y_true: np.ndarray, **kwargs
     ) -> Dict[str, Union[int, float]]:
