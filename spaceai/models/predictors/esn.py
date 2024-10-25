@@ -33,11 +33,11 @@ class ESN(SequenceModel):
         arch_type: Literal["stacked", "multi"] = "stacked",
         activation: str = "tanh",
         leakage: float = 1.0,
-        input_scaling: float = 0.9,
+        input_scaling: float = 0.1,
         rho: float = 0.99,
         bias: bool = False,
         kernel_initializer: Union[str, Callable[[Size], Tensor]] = "uniform",
-        recurrent_initializer: Union[str, Callable[[Size], Tensor]] = "normal",
+        recurrent_initializer: Union[str, Callable[[Size], Tensor]] = "uniform",
         net_gain_and_bias: bool = False,
         gradient_based: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
@@ -107,6 +107,7 @@ class ESN(SequenceModel):
                 return_states=True,
             )
 
+        pred = torch.clip(pred, -1, 1)
         if self.reduce_out is None:
             return pred
         elif self.reduce_out == "mean":
