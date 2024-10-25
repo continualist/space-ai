@@ -199,11 +199,6 @@ class Telemanom(ErrorBasedDetector):
         if len(self.window) == 0:
             return []
 
-        # TODO: reset the ignore_first_n_factor
-        if len(self.window) < 2500:
-            self.ignore_first_n_factor = 1
-        if len(self.window) < 1800:
-            self.ignore_first_n_factor = 0
         i_anom = self.process_window()
         i_anom += self.n_window * self.n_eval
 
