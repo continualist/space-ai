@@ -128,6 +128,7 @@ class ESA(
         mode: Literal["prediction", "anomaly"],
         overlapping: bool = False,
         seq_length: Optional[int] = 250,
+        n_predictions: int = 1,
         train: bool = True,
         download: bool = True,
         uniform_start_end_date: bool = False,
@@ -164,6 +165,7 @@ class ESA(
         self.train: bool = train
         self.uniform_start_end_date: bool = uniform_start_end_date
         self.drop_last: bool = drop_last
+        self.n_predictions: int = n_predictions
 
         if not channel_id in self.mission.all_channels:
             raise ValueError(f"Channel ID {channel_id} is not valid")
@@ -191,25 +193,36 @@ class ESA(
         """Return the data at the given index."""
         if index < 0 or index >= len(self):
             raise IndexError(f"Index {index} out of bounds")
-        first_idx = index if self.overlapping else index * self.window_size
-        last_idx = first_idx + self.window_size + 1
-        if last_idx > len(self.data):
-            last_idx = len(self.data)
+        first_idx = (
+            index
+            if self.overlapping
+            else index * (self.window_size + self.n_predictions - 1)
+        )
+        last_idx = first_idx + self.window_size
+        if last_idx > len(self.data) - self.n_predictions:
+            last_idx = len(self.data) - self.n_predictions
 
         x, y_true = (
-            torch.tensor(self.data[first_idx : last_idx - 1]),
-            torch.tensor(self.data[first_idx + 1 : last_idx, 0]),
+            torch.tensor(self.data[first_idx:last_idx]),
+            torch.from_numpy(
+                np.stack(
+                    [
+                        self.data[first_idx + i + 1 : last_idx + i + 1, 0]
+                        for i in range(self.n_predictions)
+                    ]
+                )
+            ).T,
         )
-        return x, y_true.unsqueeze(1)
+        return x, y_true
 
     def __len__(self) -> int:
-        length = self.data.shape[0] - self.window_size
         if self.overlapping:
+            length = self.data.shape[0] - self.window_size - self.n_predictions + 1
             return length
-        length = math.ceil(length / self.window_size)
+        length = self.data.shape[0] / (self.window_size + self.n_predictions)
         if self.drop_last:
-            return length
-        return length + 1
+            return math.floor(length)
+        return math.ceil(length)
 
     def download(self):
         """Download the dataset from the given URL and extract it to the given
