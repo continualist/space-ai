@@ -19,6 +19,7 @@ class AnomalyDetector:
 
     def __init__(self):
         self._predictor: Optional[SequenceModel] = None
+        self.ignore_first_n_factor: float = 0
 
     def __call__(self, input: np.ndarray, y_true: np.ndarray, **kwargs) -> np.ndarray:
         """Detect anomalies in the input data.

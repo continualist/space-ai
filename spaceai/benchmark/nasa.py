@@ -130,7 +130,6 @@ class NASABenchmark(Benchmark):
                 else None
             )
             callback_handler.start()
-            predictor.stateful = False
             train_history = predictor.fit(
                 train_loader=train_loader,
                 valid_loader=eval_loader,
@@ -143,7 +142,6 @@ class NASABenchmark(Benchmark):
                     for k, v in callback_handler.collect(reset=True).items()
                 }
             )
-
             logging.info(
                 "Training time on channel", channel_id, ":", results["train_time"]
             )
