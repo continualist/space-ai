@@ -4,7 +4,7 @@ import pandas as pd
 from spaceai.data import NASA
 from spaceai.benchmark import NASABenchmark
 from spaceai.models.anomaly import Telemanom
-from spaceai.models.predictors import LSTM
+from spaceai.models.predictors import ESN
 
 import numpy as np
 from torch import nn
@@ -15,9 +15,9 @@ from spaceai.utils.callbacks import SystemMonitorCallback
 
 def main():
     benchmark = NASABenchmark(
-        run_id="nasa_lstm",
-        exp_dir="experiments",
-        seq_length=250,
+        run_id="nasa_esn_gb", 
+        exp_dir="experiments", 
+        seq_length=250, 
         n_predictions=10,
         data_root="datasets",
     )
@@ -31,19 +31,19 @@ def main():
             "datasets", 
             channel_id, 
             mode="anomaly", 
-            train=False
+            train=False, 
         )
 
         detector = Telemanom(
-            pruning_factor=0.13,
+            pruning_factor=0.13, 
             force_early_anomaly=channel_id == 'C-2'
         )
-        predictor = LSTM(
-            nasa_channel.in_features_size,
-            [80, 80], 
-            10, 
-            reduce_out="first",
-            dropout=0.3,
+        predictor = ESN(
+            nasa_channel.in_features_size, 
+            [80, 80],
+            10,
+            reduce_out="mean",
+            gradient_based=True,
             stateful=True,
         )
         predictor.build()
@@ -84,4 +84,5 @@ def main():
 
 
 if __name__ == "__main__":
+
     main()

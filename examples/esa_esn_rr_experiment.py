@@ -9,22 +9,34 @@ from spaceai.models.predictors import ESN
 import numpy as np
 from torch import nn
 
+from spaceai.utils.callbacks import SystemMonitorCallback
+
 
 def main():
-    benchmark = ESABenchmark("esa_esn", "experiments", 250, "datasets")
+    benchmark = ESABenchmark(
+        run_id="esa_esn",
+        exp_dir="experiments",
+        seq_length=250,
+        n_predictions=10,
+        data_root="datasets",
+    )
+    callbacks = [SystemMonitorCallback()]
     for mission_wrapper in ESAMissions:
         mission = mission_wrapper.value
         for channel_id in mission.target_channels:
             esa_channel = ESA(
                 "datasets", mission, channel_id, mode="anomaly", train=False
             )
-            y_test = esa_channel.data[esa_channel.window_size - 1:, 0]
-            low_perc, high_perc = np.percentile(y_test, [5, 95])
-            volatility = np.std(y_test)
 
-            detector = Telemanom(low_perc, high_perc, volatility, pruning_factor=0.13)
-            predictor = ESN(esa_channel.in_features_size, [
-                            80, 80], 1, gradient_based=False)
+            detector = Telemanom(pruning_factor=0.13)
+            predictor = ESN(
+                esa_channel.in_features_size, 
+                [80, 80],
+                10,
+                reduce_out="mean",
+                gradient_based=False,
+                stateful=True,
+            )
             predictor.build()
 
             benchmark.run(
@@ -36,7 +48,8 @@ def main():
                     criterion=nn.MSELoss(),
                 ),
                 overlapping_train=True,
-                restore_predictor=True,
+                restore_predictor=False,
+                callbacks=callbacks,
             )
         
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
