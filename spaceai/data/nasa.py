@@ -184,22 +184,19 @@ class NASA(AnomalyDataset):
             if self.overlapping
             else index * (self.window_size + self.n_predictions - 1)
         )
-        last_idx = first_idx + self.window_size + self.n_predictions
-        if last_idx > len(self.data):
-            last_idx = len(self.data)
+        last_idx = first_idx + self.window_size
+        if last_idx > len(self.data) - self.n_predictions:
+            last_idx = len(self.data) - self.n_predictions
 
         x, y_true = (
-            torch.tensor(self.data[first_idx : last_idx - self.n_predictions]),
+            torch.tensor(self.data[first_idx:last_idx]),
             torch.tensor(
                 [
-                    self.data[
-                        first_idx + i + 1 : last_idx - self.n_predictions + i + 1, 0
-                    ]
+                    self.data[first_idx + i + 1 : last_idx + i + 1, 0]
                     for i in range(self.n_predictions)
                 ]
             ).T,
         )
-
         return x, y_true
 
     def __len__(self) -> int:
