@@ -19,7 +19,8 @@ class LSTM(SequenceModel):
         input_size: int,
         hidden_sizes: List[int],
         output_size: int,
-        dropout: float,
+        reduce_out: Optional[Literal["first", "mean"]] = None,
+        dropout: float = 0.3,
         device: Literal["cpu", "cuda"] = "cpu",
         stateful: bool = False,
     ):
@@ -29,16 +30,29 @@ class LSTM(SequenceModel):
             input_size (int): Number of features in the input data.
             hidden_sizes (List[int]): List of hidden layer sizes.
             output_size (int): Number of features in the output data.
+            reduce_out (Optional[Literal["first", "mean"]], optional): Whether to reduce the output. Defaults to None.
             dropout (float): Dropout rate.
         """
         super().__init__(device, stateful=stateful)
         self.input_size: int = input_size
         self.hidden_sizes: List[int] = hidden_sizes
         self.output_size: int = output_size
+        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.dropout: float = dropout
 
     def build_fn(self):
         return _LSTM(self.input_size, self.hidden_sizes, self.output_size, self.dropout)
+
+    def __call__(self, input):
+        pred = super().__call__(input)
+        if self.reduce_out is None:
+            return pred
+        elif self.reduce_out == "mean":
+            return pred.mean(dim=-1)
+        elif self.reduce_out == "first":
+            return pred[..., 0]
+
+        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
 
 class _LSTM(nn.Module):
