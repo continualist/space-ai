@@ -61,12 +61,11 @@ class ESN(SequenceModel):
             net_gain_and_bias (bool, optional): If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Defaults to False.
             device (Literal["cpu", "cuda"], optional): Device to move the model to. Defaults to "cpu".
         """
-        super().__init__(device, stateful=stateful)
+        super().__init__(device, stateful=stateful, reduce_out=reduce_out)
         self.model: EchoStateNetwork
         self.input_size: int = input_size
         self.layers: List[int] = layers
         self.output_size: int = output_size
-        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.arch_type: Literal["stacked", "multi"] = arch_type
         self.activation: str = activation
         self.leakage: float = leakage
@@ -92,38 +91,9 @@ class ESN(SequenceModel):
         Returns:
             torch.Tensor: Predicted values
         """
-        if self.model is None:
-            raise ValueError("Model must be built before calling predict.")
-
-        if isinstance(input, np.ndarray):
-            input = torch.from_numpy(input).float()
-
-        if not self.stateful:
-            pred = self.model(input)
-        else:
-            pred, self.state = self.model(
-                input,
-                [s[-1] for s in self.state] if self.state is not None else None,
-                return_states=True,
-            )
-
-        pred = torch.clip(pred, -1, 1)
-        if self.reduce_out is None:
-            return pred
-        elif self.reduce_out == "mean":
-            orig_pred = pred.clone()
-            for i in range(1, pred.shape[-1]):
-                pred[i:, ..., i] = orig_pred[:-i, ..., i]
-            startpred = torch.stack(
-                [pred[i - 1, ..., :i].mean(dim=-1) for i in range(1, pred.shape[-1])]
-            )
-            endpred = pred[pred.shape[-1] - 1 :].mean(dim=-1)
-            out = torch.cat([startpred, endpred], dim=0)
-            return out
-        elif self.reduce_out == "first":
-            return pred[..., 0]
-
-        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
+        if self.stateful:
+            self.state = [s[-1] for s in self.state] if self.state is not None else None
+        return super().__call__(input)
 
     def fit(  # type: ignore[override]
         self,

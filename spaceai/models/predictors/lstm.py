@@ -33,34 +33,14 @@ class LSTM(SequenceModel):
             reduce_out (Optional[Literal["first", "mean"]], optional): Whether to reduce the output. Defaults to None.
             dropout (float): Dropout rate.
         """
-        super().__init__(device, stateful=stateful)
+        super().__init__(device, stateful=stateful, reduce_out=reduce_out)
         self.input_size: int = input_size
         self.hidden_sizes: List[int] = hidden_sizes
         self.output_size: int = output_size
-        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.dropout: float = dropout
 
     def build_fn(self):
         return _LSTM(self.input_size, self.hidden_sizes, self.output_size, self.dropout)
-
-    def __call__(self, input):
-        pred = super().__call__(input)
-        if self.reduce_out is None:
-            return pred
-        elif self.reduce_out == "mean":
-            orig_pred = pred.clone()
-            for i in range(1, pred.shape[-1]):
-                pred[i:, ..., i] = orig_pred[:-i, ..., i]
-            startpred = torch.stack(
-                [pred[i - 1, ..., :i].mean(dim=-1) for i in range(1, pred.shape[-1])]
-            )
-            endpred = pred[pred.shape[-1] - 1 :].mean(dim=-1)
-            out = torch.cat([startpred, endpred], dim=0)
-            return out
-        elif self.reduce_out == "first":
-            return pred[..., 0]
-
-        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
 
 class _LSTM(nn.Module):

@@ -130,6 +130,7 @@ class NASABenchmark(Benchmark):
                 else None
             )
             callback_handler.start()
+            predictor.stateful = False
             train_history = predictor.fit(
                 train_loader=train_loader,
                 valid_loader=eval_loader,

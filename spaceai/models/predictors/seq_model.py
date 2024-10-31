@@ -28,10 +28,12 @@ class SequenceModel:
         self,
         device: Literal["cpu", "cuda"] = "cpu",
         stateful: bool = False,
+        reduce_out: Optional[Literal["first", "mean"]] = None,
     ):
         self._device: Literal["cpu", "cuda"] = device
         self.model: Optional[torch.nn.Module] = None
         self.stateful: bool = stateful
+        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.state: Optional[List[torch.Tensor]] = None
 
     def build_fn(self) -> torch.nn.Module:
@@ -65,7 +67,23 @@ class SequenceModel:
             pred = self.model(input)
         else:
             pred, self.state = self.model(input, self.state, return_states=True)
-        return pred
+
+        if self.reduce_out is None:
+            return pred
+        elif self.reduce_out == "mean":
+            orig_pred = pred.clone()
+            for i in range(1, pred.shape[-1]):
+                pred[i:, ..., i] = orig_pred[:-i, ..., i]
+            startpred = torch.stack(
+                [pred[i - 1, ..., :i].mean(dim=-1) for i in range(1, pred.shape[-1])]
+            )
+            endpred = pred[pred.shape[-1] - 1 :].mean(dim=-1)
+            out = torch.cat([startpred, endpred], dim=0)
+            return out
+        elif self.reduce_out == "first":
+            return pred[..., 0]
+
+        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
     def fit(
         self,
@@ -176,7 +194,9 @@ class SequenceModel:
         with torch.no_grad():
             for inputs, targets in eval_loader:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = self.model(inputs)
+                outputs = self(inputs)
+                if self.reduce_out is not None:
+                    targets = targets[..., -1]
                 for name, metric in metrics_.items():
                     metrics_values[f"{name}_eval"] += metric(
                         outputs, targets
