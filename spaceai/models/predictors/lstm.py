@@ -48,7 +48,15 @@ class LSTM(SequenceModel):
         if self.reduce_out is None:
             return pred
         elif self.reduce_out == "mean":
-            return pred.mean(dim=-1)
+            orig_pred = pred.clone()
+            for i in range(1, pred.shape[-1]):
+                pred[i:, ..., i] = orig_pred[:-i, ..., i]
+            startpred = torch.stack(
+                [pred[i - 1, ..., :i].mean(dim=-1) for i in range(1, pred.shape[-1])]
+            )
+            endpred = pred[pred.shape[-1] - 1 :].mean(dim=-1)
+            out = torch.cat([startpred, endpred], dim=0)
+            return out
         elif self.reduce_out == "first":
             return pred[..., 0]
 
