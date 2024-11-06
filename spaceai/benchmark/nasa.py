@@ -168,7 +168,7 @@ class NASABenchmark(Benchmark):
         y_pred, y_trg = zip(
             *[
                 (
-                    predictor(x).detach().cpu().squeeze().numpy(),
+                    predictor(x.to(predictor.device)).detach().cpu().squeeze().numpy(),
                     y.detach().cpu().squeeze().numpy(),
                 )
                 for x, y in tqdm(test_loader, desc="Predicting")
