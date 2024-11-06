@@ -29,11 +29,13 @@ class SequenceModel:
         device: Literal["cpu", "cuda"] = "cpu",
         stateful: bool = False,
         reduce_out: Optional[Literal["first", "mean"]] = None,
+        washout: int = 0,
     ):
         self._device: Literal["cpu", "cuda"] = device
         self.model: Optional[torch.nn.Module] = None
         self.stateful: bool = stateful
         self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
+        self.washout: int = washout
         self.state: Optional[List[torch.Tensor]] = None
 
     def build_fn(self) -> torch.nn.Module:
@@ -129,6 +131,9 @@ class SequenceModel:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
                     optimizer.zero_grad()
                     outputs = self.model(inputs)
+                    if self.washout is not None:
+                        targets = targets[self.washout :]
+                        outputs = outputs[-len(targets) :]
                     loss = criterion(outputs, targets)
                     loss.backward()
                     optimizer.step()

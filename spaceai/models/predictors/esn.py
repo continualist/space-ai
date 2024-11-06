@@ -41,8 +41,8 @@ class ESN(SequenceModel):
         net_gain_and_bias: bool = False,
         gradient_based: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
-        return_sequences: bool = True,
         stateful: bool = False,
+        washout: int = 0,
     ):
         """Initialize the ESN model.
 
@@ -60,8 +60,12 @@ class ESN(SequenceModel):
             recurrent_initializer (Union[str, Callable[[Size], Tensor]], optional): The kind of initialization of the recurrent matrix. Defaults to "normal".
             net_gain_and_bias (bool, optional): If ``True``, the network uses additional ``g`` (gain) and ``b`` (bias) parameters. Defaults to False.
             device (Literal["cpu", "cuda"], optional): Device to move the model to. Defaults to "cpu".
+            stateful (bool, optional): Whether to use stateful ESN. Defaults to False.
+            washout (int, optional): Number of time steps to washout. Defaults to 0.
         """
-        super().__init__(device, stateful=stateful, reduce_out=reduce_out)
+        super().__init__(
+            device, stateful=stateful, reduce_out=reduce_out, washout=washout
+        )
         self.model: EchoStateNetwork
         self.input_size: int = input_size
         self.layers: List[int] = layers
@@ -73,7 +77,6 @@ class ESN(SequenceModel):
         self.rho: float = rho
         self.bias: bool = bias
         self.gradient_based: bool = gradient_based
-        self.return_sequences: bool = return_sequences
         self.kernel_initializer: Union[str, Callable[[Size], Tensor]] = (
             kernel_initializer
         )
@@ -119,7 +122,9 @@ class ESN(SequenceModel):
                 **kwargs,
             )
         else:
-            self.model.fit_readout(*args, train_loader=train_loader, **kwargs)
+            self.model.fit_readout(
+                *args, train_loader=train_loader, washout=self.washout, **kwargs
+            )
 
             for x, y in train_loader:
                 self.model(x)
