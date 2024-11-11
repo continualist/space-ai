@@ -14,7 +14,7 @@ from spaceai.utils.callbacks import SystemMonitorCallback
 
 def main():
     benchmark = ESABenchmark(
-        run_id="esa_esn",
+        run_id="esa_esn_rr",
         exp_dir="experiments",
         seq_length=250,
         n_predictions=10,
@@ -35,7 +35,7 @@ def main():
                 10,
                 reduce_out="mean",
                 gradient_based=False,
-                stateful=True,
+                washout=200,
             )
             predictor.build()
 

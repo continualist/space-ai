@@ -44,7 +44,7 @@ def main():
             10, 
             reduce_out="first",
             dropout=0.3,
-            stateful=True,
+            washout=249,
         )
         predictor.build()
 
@@ -59,6 +59,7 @@ def main():
                 patience_before_stopping=10,
                 min_delta=0.0003,
                 batch_size=64,
+                restore_best=False,
             ),
             overlapping_train=True,
             restore_predictor=False,

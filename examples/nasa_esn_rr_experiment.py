@@ -44,7 +44,7 @@ def main():
             10,
             reduce_out="mean",
             gradient_based=False,
-            stateful=True,
+            washout=200,
         )
         predictor.build()
 
