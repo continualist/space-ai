@@ -149,7 +149,7 @@ class ESABenchmark(Benchmark):
                 }
             )
             logging.info(
-                "Training time on channel", channel_id, ":", results["train_time"]
+                f"Training time on channel {channel_id}: {results['train_time']}"
             )
             train_history = pd.DataFrame.from_records(train_history).to_csv(
                 os.path.join(self.run_dir, f"train_history-{channel_id}.csv"),
@@ -215,6 +215,13 @@ class ESABenchmark(Benchmark):
         classification_results = self.compute_classification_metrics(
             true_anomalies, pred_anomalies
         )
+        esa_classification_results = self.compute_esa_classification_metrics(
+            classification_results,
+            true_anomalies,
+            pred_anomalies,
+            total_length=len(y_trg),
+        )
+        classification_results.update(esa_classification_results)
         results.update(classification_results)
         if train_history is not None:
             results["train_loss"] = train_history[-1]["loss_train"]
@@ -318,3 +325,42 @@ class ESABenchmark(Benchmark):
             else 0
         )
         return results
+
+    def compute_esa_classification_metrics(
+        self,
+        results: Dict[str, Any],
+        true_anomalies: List[Tuple[int, int]],
+        pred_anomalies: List[Tuple[int, int]],
+        total_length: int,
+    ) -> Dict[str, Any]:
+        """Compute ESA classification metrics.
+
+        Args:
+            results (Dict[str, Any]): the classification results
+            true_anomalies (List[Tuple[int, int]]): the true anomalies
+            pred_anomalies (List[Tuple[int, int]]): the predicted anomalies
+            total_length (int): the total length of the sequence
+
+        Returns:
+            Dict[str, Any]: the ESA metrics results
+        """
+        esa_results = {}
+        indices_true_grouped = [list(range(e[0], e[1] + 1)) for e in true_anomalies]
+        indices_true_flat = set([i for group in indices_true_grouped for i in group])
+        indices_pred_grouped = [list(range(e[0], e[1] + 1)) for e in pred_anomalies]
+        indices_pred_flat = set([i for group in indices_pred_grouped for i in group])
+        indices_all_flat = indices_true_flat.union(indices_pred_flat)
+        n_e = total_length - len(indices_true_flat)
+        tn_e = total_length - len(indices_all_flat)
+        esa_results["tnr"] = tn_e / n_e if n_e > 0 else 1
+        esa_results["precision_corrected"] = results["precision"] * esa_results["tnr"]
+        esa_results["f0.5"] = (
+            (
+                (1 + 0.5**2)
+                * (esa_results["precision_corrected"] * results["recall"])
+                / (0.5**2 * esa_results["precision_corrected"] + results["recall"])
+            )
+            if esa_results["precision_corrected"] + results["recall"] > 0
+            else 0
+        )
+        return esa_results
