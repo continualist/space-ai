@@ -87,6 +87,12 @@ class SequenceModel:
 
         raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
+    def _apply_washout(self, inputs: torch.Tensor, targets: torch.Tensor):
+        if self.washout is not None:
+            targets = targets[self.washout :]
+            inputs = inputs[-len(targets) :]
+        return inputs, targets
+
     def fit(
         self,
         train_loader: DataLoader,
@@ -131,9 +137,7 @@ class SequenceModel:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
                     optimizer.zero_grad()
                     outputs = self.model(inputs)
-                    if self.washout is not None:
-                        targets = targets[self.washout :]
-                        outputs = outputs[-len(targets) :]
+                    outputs, targets = self._apply_washout(outputs, targets)
                     loss = criterion(outputs, targets)
                     loss.backward()
                     optimizer.step()
@@ -141,7 +145,9 @@ class SequenceModel:
                     with torch.no_grad():
                         for name, metric in metrics_.items():
                             if name == "loss":
-                                epoch_metrics["loss_train"] += loss.item()
+                                epoch_metrics[
+                                    "loss_train"
+                                ] += loss.item() * inputs.size(1)
                             else:
                                 epoch_metrics[f"{name}_train"] += metric(
                                     outputs, targets
@@ -158,7 +164,8 @@ class SequenceModel:
                 if epoch_metrics["loss_eval"] < best_val_loss - min_delta_:
                     best_val_loss = epoch_metrics["loss_eval"]
                     epochs_since_improvement = 0
-                    best_model = copy.deepcopy(self.model.state_dict())
+                    if restore_best:
+                        best_model = copy.deepcopy(self.model.state_dict())
                 else:
                     epochs_since_improvement += 1
 
@@ -199,9 +206,8 @@ class SequenceModel:
         with torch.no_grad():
             for inputs, targets in eval_loader:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                outputs = self(inputs)
-                if self.reduce_out is not None:
-                    targets = targets[..., -1]
+                outputs = self.model(inputs)
+                outputs, targets = self._apply_washout(outputs, targets)
                 for name, metric in metrics_.items():
                     metrics_values[f"{name}_eval"] += metric(
                         outputs, targets
