@@ -144,7 +144,7 @@ class NASABenchmark(Benchmark):
                 }
             )
             logging.info(
-                "Training time on channel", channel_id, ":", results["train_time"]
+                f"Training time on channel {channel_id}: {results['train_time']}"
             )
             train_history = pd.DataFrame.from_records(train_history).to_csv(
                 os.path.join(self.run_dir, f"train_history-{channel_id}.csv"),
@@ -206,7 +206,6 @@ class NASABenchmark(Benchmark):
         )
 
         true_anomalies = test_channel.anomalies
-
         classification_results = self.compute_classification_metrics(
             true_anomalies, pred_anomalies
         )
