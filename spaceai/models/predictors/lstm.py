@@ -65,6 +65,7 @@ class _LSTM(nn.Module):
         output_size: int,
         dropout: float,
         washout: int = 0,
+        unit_forget_bias: bool = True,
     ):
         """Initialize the LSTM model.
 
@@ -75,10 +76,13 @@ class _LSTM(nn.Module):
             num_layers (int): Number of LSTM layers.
             dropout (float): Dropout rate.
             washout (int, optional): Number of time steps to washout. Defaults to 0.
+            unit_forget_bias (bool, optional): Whether to use unit forget bias. Defaults to True.
         """
         super().__init__()
         self.input_size: int = input_size
         self.hidden_sizes: List[int] = hidden_sizes
+        self.unit_forget_bias: bool = unit_forget_bias
+        self.washout: int = washout
         self.lstm_layers = nn.ModuleList(
             [
                 _LSTMDropoutLayer(
@@ -90,7 +94,27 @@ class _LSTM(nn.Module):
             ]
         )
         self.fc: nn.Linear = nn.Linear(hidden_sizes[-1], output_size)
-        self.washout: int = washout
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        for layer in self.modules():
+            if isinstance(layer, nn.LSTM):
+                for name, param in layer.named_parameters():
+                    if "weight_ih" in name:
+                        nn.init.xavier_uniform_(param.data)
+                    elif "weight_hh" in name:
+                        nn.init.orthogonal_(param.data)
+                    elif "bias_ih" in name:
+                        nn.init.zeros_(param.data)
+                        if self.unit_forget_bias:
+                            hs = param.size(0) // 4
+                            param.data[hs : hs * 2].fill_(1)
+                    elif "bias_hh" in name:
+                        nn.init.zeros_(param.data)
+            elif isinstance(layer, nn.Linear):
+                nn.init.xavier_uniform_(layer.weight)
+                if layer.bias is not None:
+                    nn.init.zeros_(layer.bias)
 
     def forward(
         self,
@@ -111,15 +135,18 @@ class _LSTM(nn.Module):
         h = x
         states = []
         for i, lstm in enumerate(self.lstm_layers):
+            washout_layer = 0
+            if self.training and i == len(self.lstm_layers) - 1:
+                washout_layer = self.washout
+            h = lstm(
+                h,
+                initial_state[i] if initial_state else None,
+                return_states=return_states,
+                washout_layer=washout_layer,
+            )
             if return_states:
-                h, state = lstm(
-                    h, initial_state[i] if initial_state else None, return_states=True
-                )
+                h, state = h
                 states.append(state)
-            else:
-                h = lstm(h, initial_state[i] if initial_state else None)
-            if i == len(self.lstm_layers) - 1:
-                h = h[self.washout :]
         out = self.fc(h)
         if return_states:
             return out, states
@@ -152,6 +179,7 @@ class _LSTMDropoutLayer(nn.Module):
         x: torch.Tensor,
         initial_state: Optional[List[torch.Tensor]] = None,
         return_states: bool = False,
+        washout_layer: int = 0,
     ) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
         """Forward pass of the LSTM.
 
@@ -159,11 +187,14 @@ class _LSTMDropoutLayer(nn.Module):
             x (torch.Tensor): Input data.
             initial_state (Optional[List[torch.Tensor]]): Initial hidden state.
             return_states (bool): Whether to return hidden states.
+            washout_layer (Optional[int]): Number of time steps to washout.
 
         Returns:
             Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]: Output data.
         """
         h, state = self.lstm(x, initial_state)
+        if washout_layer is not None:
+            h = h[washout_layer:]
         h = self.dropout(h)
         if return_states:
             return h, state
