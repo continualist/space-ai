@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 import numpy as np
 import torch
-from torchrc.models.esn import EchoStateNetwork
+from torchdyno.models.esn import EchoStateNetwork
 
 from spaceai.models.predictors.seq_model import SequenceModel
 
@@ -145,7 +145,7 @@ class ESN(SequenceModel):
     def build_fn(self) -> Module:
         return EchoStateNetwork(
             input_size=self.input_size,
-            layers=self.layers,
+            layer_sizes=self.layers,
             output_size=self.output_size,
             arch_type=self.arch_type,
             activation=self.activation,

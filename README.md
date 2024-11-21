@@ -10,8 +10,6 @@ Run the following commands within your python virtual environment:
 ```sh
 pip install poetry
 
-pip install git+https://github.com/GeremiaPompei/torch-rc@fix/reservoir_fix
-
 git clone https://github.com/continualist/space-ai.git
 cd space-ai
 poetry install

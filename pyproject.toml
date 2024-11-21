@@ -9,7 +9,7 @@ readme = "README.md"
 python = "^3.10"
 argparse = "^1.4.0"
 logging = "^0.4.9.6"
-numpy = "<2"
+numpy = "^2.1.3"
 pandas = "^2.2.2"
 scikit-learn = "^1.5.1"
 more-itertools = "^10.3.0"
@@ -17,6 +17,7 @@ tqdm = "^4.66.5"
 datetime = "^5.5"
 requests = "^2.32.3"
 psutil = "^6.1.0"
+torchdyno = "^0.2.2"
 
 [tool.poetry.group.dev]
 optional = true
