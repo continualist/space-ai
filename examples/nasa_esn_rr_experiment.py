@@ -6,9 +6,7 @@ from spaceai.benchmark import NASABenchmark
 from spaceai.models.anomaly import Telemanom
 from spaceai.models.predictors import ESN
 
-import numpy as np
 from torch import nn
-from torch import optim
 
 from spaceai.utils.callbacks import SystemMonitorCallback
 

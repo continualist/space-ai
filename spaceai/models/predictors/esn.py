@@ -41,6 +41,7 @@ class ESN(SequenceModel):
         net_gain_and_bias: bool = False,
         gradient_based: bool = False,
         device: Literal["cpu", "cuda"] = "cpu",
+        return_sequences: bool = True,
         stateful: bool = False,
         washout: int = 0,
     ):
@@ -70,6 +71,7 @@ class ESN(SequenceModel):
         self.input_size: int = input_size
         self.layers: List[int] = layers
         self.output_size: int = output_size
+        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.arch_type: Literal["stacked", "multi"] = arch_type
         self.activation: str = activation
         self.leakage: float = leakage

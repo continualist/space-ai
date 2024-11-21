@@ -43,6 +43,7 @@ class LSTM(SequenceModel):
         self.input_size: int = input_size
         self.hidden_sizes: List[int] = hidden_sizes
         self.output_size: int = output_size
+        self.reduce_out: Optional[Literal["first", "mean"]] = reduce_out
         self.dropout: float = dropout
 
     def build_fn(self):
@@ -53,6 +54,17 @@ class LSTM(SequenceModel):
             self.dropout,
             washout=self.washout,
         )
+
+    def __call__(self, input):
+        pred = super().__call__(input)
+        if self.reduce_out is None:
+            return pred
+        elif self.reduce_out == "mean":
+            return pred.mean(dim=-1)
+        elif self.reduce_out == "first":
+            return pred[..., 0]
+
+        raise ValueError(f"Invalid reduce_out value: {self.reduce_out}")
 
 
 class _LSTM(nn.Module):
