@@ -2,6 +2,7 @@ import ast
 import logging
 import math
 import os
+import tarfile
 from typing import (
     Literal,
     Optional,
@@ -30,10 +31,7 @@ class NASA(AnomalyDataset):
     algorithms.
     """
 
-    resources = [
-        "https://s3-us-west-2.amazonaws.com/telemanom/data.zip",
-        "https://raw.githubusercontent.com/khundman/telemanom/master/labeled_anomalies.csv",
-    ]
+    resource = "https://www.dropbox.com/s/uv9ojw353qwzqht/SMAP.tar.gz?dl=1"
 
     channel_ids = [
         "A-1",
@@ -224,10 +222,23 @@ class NASA(AnomalyDataset):
             return
 
         os.makedirs(self.root, exist_ok=True)
-        download_and_extract_zip(self.resources[0], self.raw_folder, cleanup=True)
-        download_file(
-            self.resources[1],
-            os.path.join(self.raw_folder, "data", "test", "anomalies.csv"),
+        tar_filepath = "data.tar.gz"
+        download_file(self.resource, to=tar_filepath)
+        tar = tarfile.open(tar_filepath, "r:gz")
+        tar.extractall(path=self.root)
+        tar.close()
+        os.remove(tar_filepath)
+
+        nasa_dir = os.path.join(self.root, "NASA")
+        data_dir = os.path.join(nasa_dir, "data")
+        os.mkdir(nasa_dir)
+        os.rename(
+            os.path.join(self.root, "SMAP"),
+            data_dir
+        )
+        os.rename(
+            os.path.join(data_dir, "labeled_anomalies.csv"),
+            os.path.join(data_dir, "test", "anomalies.csv")
         )
 
     def load_and_preprocess(self) -> Tuple[torch.Tensor, pd.DataFrame]:
