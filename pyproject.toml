@@ -1,9 +1,20 @@
 [tool.poetry]
 name = "spaceai"
-version = "0.0.1"
-description = ""
-authors = ["Valerio De Caro <valerio.decaro@phd.unipi.it>"]
+version = "0.1.0"
+description = "A Python library for space AI benchmarking"
+authors = ["ContinualIST <valerio.decaro@di.unipi.it>"]
+maintainers = [
+    "Valerio De Caro <valerio.decaro@di.unipi.it>",
+    "Geremia Pompei <geremia.pompei@di.unipi.it>"
+]
+license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/continualist/space-ai"
+repository = "https://github.com/continualist/space-ai"
+
+[tool.poetry.build]
+script = "build.py"
+generate-setup-file = false
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -54,6 +65,7 @@ enum-tools = { extras = ["sphinx"], version = "^0.11.0" }
 sphinx-favicon = "^1.0.1"
 sphinx-design = "^0.5.0"
 myst-parser = "^2.0.0"
+sphinx-icon = "^0.2.2"
 
 [build-system]
 requires = ["poetry-core"]
@@ -61,9 +73,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.0.1"
+version = "0.1.0"
 tag_format = "$version"
-version_files = ["pyproject.toml:version", "eclypse/__init__.py:__version__"]
+version_files = [
+    "pyproject.toml:version",
+    "spaceai/__init__.py:__version__",
+    "setup.py:version",
+]
 
 [tool.pycln]
 all = true
