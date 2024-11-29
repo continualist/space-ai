@@ -9,7 +9,7 @@ from spaceai.models.predictors import LSTM
 from torch import nn
 from torch import optim
 
-from spaceai.utils.callbacks import SystemMonitorCallback
+from spaceai.benchmark.callbacks import SystemMonitorCallback
 
 
 def main():
@@ -25,18 +25,14 @@ def main():
         mission = mission_wrapper.value
         for channel_id in mission.target_channels:
             esa_channel = ESA(
-                "datasets", 
-                mission, 
-                channel_id, 
-                mode="anomaly", 
-                train=False
+                "datasets", mission, channel_id, mode="anomaly", train=False
             )
 
             detector = Telemanom(pruning_factor=0.13)
             predictor = LSTM(
-                esa_channel.in_features_size, 
-                [80, 80], 
-                10, 
+                esa_channel.in_features_size,
+                [80, 80],
+                10,
                 reduce_out="first",
                 dropout=0.3,
                 washout=249,
@@ -61,17 +57,16 @@ def main():
                 restore_predictor=False,
                 callbacks=callbacks,
             )
-        
+
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
-    tp = results_df['true_positives'].sum()
-    fp = results_df['false_positives'].sum()
-    fn = results_df['false_negatives'].sum()
+    tp = results_df["true_positives"].sum()
+    fp = results_df["false_positives"].sum()
+    fn = results_df["false_negatives"].sum()
 
     total_precision = tp / (tp + fp)
     total_recall = tp / (tp + fn)
-    total_f1 = 2 * (total_precision * total_recall) / \
-        (total_precision + total_recall)
-    
+    total_f1 = 2 * (total_precision * total_recall) / (total_precision + total_recall)
+
     print("True Positives: ", tp)
     print("False Positives: ", fp)
     print("False Negatives: ", fn)

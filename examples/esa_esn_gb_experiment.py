@@ -8,7 +8,7 @@ from spaceai.models.predictors import ESN
 
 from torch import nn, optim
 
-from spaceai.utils.callbacks import SystemMonitorCallback
+from spaceai.benchmark.callbacks import SystemMonitorCallback
 
 
 def main():
@@ -29,8 +29,8 @@ def main():
 
             detector = Telemanom(pruning_factor=0.13)
             predictor = ESN(
-                esa_channel.in_features_size, 
-                [80, 80], 
+                esa_channel.in_features_size,
+                [80, 80],
                 10,
                 reduce_out="mean",
                 gradient_based=True,
@@ -45,8 +45,7 @@ def main():
                 detector,
                 fit_predictor_args=dict(
                     criterion=nn.MSELoss(),
-                    optimizer=optim.Adam(
-                        predictor.model.parameters(), lr=0.001),
+                    optimizer=optim.Adam(predictor.model.parameters(), lr=0.001),
                     epochs=35,
                     patience_before_stopping=10,
                     min_delta=0.0003,
@@ -57,17 +56,16 @@ def main():
                 restore_predictor=False,
                 callbacks=callbacks,
             )
-        
+
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
-    tp = results_df['true_positives'].sum()
-    fp = results_df['false_positives'].sum()
-    fn = results_df['false_negatives'].sum()
+    tp = results_df["true_positives"].sum()
+    fp = results_df["false_positives"].sum()
+    fn = results_df["false_negatives"].sum()
 
     total_precision = tp / (tp + fp)
     total_recall = tp / (tp + fn)
-    total_f1 = 2 * (total_precision * total_recall) / \
-        (total_precision + total_recall)
-    
+    total_f1 = 2 * (total_precision * total_recall) / (total_precision + total_recall)
+
     print("True Positives: ", tp)
     print("False Positives: ", fp)
     print("False Negatives: ", fn)
