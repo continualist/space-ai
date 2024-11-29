@@ -1644,8 +1644,8 @@ files = [
 [package.dependencies]
 numpy = [
     {version = ">=1.22.4", markers = "python_version < \"3.11\""},
-    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
     {version = ">=1.26.0", markers = "python_version >= \"3.12\""},
+    {version = ">=1.23.2", markers = "python_version == \"3.11\""},
 ]
 python-dateutil = ">=2.8.2"
 pytz = ">=2020.1"
@@ -1939,8 +1939,8 @@ astroid = ">=3.3.4,<=3.4.0-dev0"
 colorama = {version = ">=0.4.5", markers = "sys_platform == \"win32\""}
 dill = [
     {version = ">=0.2", markers = "python_version < \"3.11\""},
-    {version = ">=0.3.6", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
     {version = ">=0.3.7", markers = "python_version >= \"3.12\""},
+    {version = ">=0.3.6", markers = "python_version >= \"3.11\" and python_version < \"3.12\""},
 ]
 isort = ">=4.2.5,<5.13.0 || >5.13.0,<6"
 mccabe = ">=0.6,<0.8"
@@ -2701,6 +2701,26 @@ doc = ["pydata-sphinx-theme", "sphinx (<6)", "sphinx-copybutton", "sphinx-design
 test = ["beautifulsoup4", "pytest", "pytest-cov"]
 
 [[package]]
+name = "sphinx-icon"
+version = "0.2.2"
+description = "A sphinx custom role to embed inline fontawesome incon in the latex and html outputs"
+optional = false
+python-versions = ">=3.6.9"
+files = [
+    {file = "sphinx-icon-0.2.2.tar.gz", hash = "sha256:d4361e96dbfe64d60481f2386f4986cb2e23716a968b130ceca01c25dcd63534"},
+    {file = "sphinx_icon-0.2.2-py3-none-any.whl", hash = "sha256:a985bf81077d0a79a7c166c16b6252f1e89bb3ad188ed89326a21bb334521105"},
+]
+
+[package.dependencies]
+pyyaml = "*"
+sphinx = "*"
+
+[package.extras]
+dev = ["mypy", "nox", "pre-commit"]
+doc = ["pydata-sphinx-theme (==0.13.0rc3)", "sphinx-copybutton", "sphinx-design"]
+test = ["beautifulsoup4", "pytest", "pytest-cov", "pytest-regressions"]
+
+[[package]]
 name = "sphinx-jinja2-compat"
 version = "0.3.0"
 description = "Patches Jinja2 v3 to restore compatibility with earlier Sphinx versions."
@@ -3431,4 +3451,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "6e12827f83fe4de5433a83f7536c977581075c61d873fdf28a6849f87bd838f2"
+content-hash = "156f0653e4d2e0081df135b4e9bb8e7e2d0ab618df65b76734dd12f0b99bc510"

@@ -17,7 +17,7 @@ repos:
       - id: commitizen
       - id: commitizen-branch
         stages:
-          - push
+          - pre-push
 
   - repo: https://github.com/psf/black
     rev: 24.2.0
@@ -28,7 +28,6 @@ repos:
     rev: v1.7.5
     hooks:
       - id: docformatter
-        additional_dependencies: [tomli]
         args: [--in-place, --config, ./pyproject.toml]
 
   - repo: https://github.com/pycqa/isort
@@ -48,12 +47,5 @@ repos:
       - id: mypy
         exclude: ^tests/
 
-  # - repo: local
-  #   hooks:
-  #     - id: pylint
-  #       name: pylint
-  #       entry: pylint
-  #       language: python
-  #       types: [python]
 
 exclude: "examples/.*"
