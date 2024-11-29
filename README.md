@@ -15,14 +15,14 @@
 
 SpaceAI is a comprehensive library designed for space mission data analysis and machine learning model benchmarking. It provides tools for data preprocessing, model training, and evaluation, specifically tailored for space-related datasets. The library includes implementations of various machine learning models, such as ESNs (Echo State Networks) and LSTMs (Long Short-Term Memory networks), and offers a range of utilities to facilitate the development and testing of these models. With SpaceAI, researchers and engineers can streamline their workflow and focus on deriving insights from space mission data.
 
-Here's the link to the documentation: [https://spaceai.readthedocs.io/en/latest/](https://spaceai.readthedocs.io/en/latest/)
+Here's the link to the documentation: [https://space-ai.readthedocs.io/en/latest/](https://spaceai.readthedocs.io/en/latest/)
 
 ## Installation
 
 To install SpaceAI and all its dependencies, you can run the following commands:
 ```bash
 
-pip install space-ai
+pip install spaceai
 
 ```
 
