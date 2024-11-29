@@ -14,11 +14,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .utils import (
-    download_file,
-)
-
 from .anomaly_dataset import AnomalyDataset
+from .utils import download_file
 
 
 class NASA(AnomalyDataset):

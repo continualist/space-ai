@@ -37,19 +37,19 @@ optional = true
 black = "^24.3.0"
 commitizen = "^3.12.0"
 pre-commit = "^3.5.0"
-pipx = "^1.2.1"
-ipykernel = "^6.27.0"
 isort = "^5.13.2"
 pycln = "^2.4.0"
 pylint = "^3.1.0"
+docformatter = { extras = ["tomli"], version = "^1.7.5" }
 
-[tool.poetry.group.test]
+[tool.poetry.group.deploy]
 optional = true
 
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.3"
-pytest-cov = "^4.1.0"
-pytest-xdist = "^3.5.0"
+[tool.poetry.group.deploy.dependencies]
+mypy = "^1.13.0"
+wheel = "^0.45.0"
+setuptools = "^75.5.0"
+twine = "^5.1.1"
 
 [tool.poetry.group.docs]
 optional = true

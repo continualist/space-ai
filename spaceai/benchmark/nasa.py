@@ -20,9 +20,8 @@ from tqdm import tqdm
 
 from spaceai.data import NASA
 from spaceai.data.utils import seq_collate_fn
-from .callbacks import (
-    CallbackHandler,
-)
+
+from .callbacks import CallbackHandler
 
 if TYPE_CHECKING:
     from spaceai.models.predictors import SequenceModel

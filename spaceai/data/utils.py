@@ -1,16 +1,14 @@
 import os
 import zipfile
-
-import requests  # type: ignore[import-untyped]
-from tqdm import tqdm
-
 from typing import (
-    Optional,
     Callable,
     Literal,
+    Optional,
 )
 
+import requests  # type: ignore[import-untyped]
 import torch
+from tqdm import tqdm
 
 
 def download_and_extract_zip(url: str, extract_to: str, cleanup: bool = False):

@@ -1,7 +1,10 @@
 import os
-import psutil
+from typing import (
+    Any,
+    Dict,
+)
 
-from typing import Any, Dict
+import psutil
 
 from .callback import Callback
 
@@ -17,8 +20,10 @@ class SystemMonitorCallback(Callback):
         self.mem: float = 0
 
     def call(self):
-        """Method to be executed by the callback. It collects the CPU and memory usage \
-        of the process."""
+        """Method to be executed by the callback.
+
+        It collects the CPU and memory usage \ of the process.
+        """
         curr_cpu = self.p.cpu_percent() / psutil.cpu_count()
         curr_mem = self.p.memory_info().rss
         self.cpu = self.cpu + (curr_cpu - self.cpu) / (self.n + 1)
@@ -26,8 +31,8 @@ class SystemMonitorCallback(Callback):
         self.n += 1
 
     def collect(self, reset: bool = False) -> Dict[str, Any]:
-        """Collect data from the callback. It returns a dictionary with the data collected \
-        by the callback.
+        """Collect data from the callback. It returns a dictionary with the data
+        collected \ by the callback.
 
         Args:
             reset (bool): If True, the callback should reset the data collected.

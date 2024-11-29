@@ -1,15 +1,22 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Dict, Any, Optional
-from threading import Thread
 
 import time
+from threading import Thread
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+)
 
 if TYPE_CHECKING:
     from .callback import Callback
 
 
 class CallbackHandler:
-    """Class to handle the execution of a list of callbacks during the execution of a benchmark."""
+    """Class to handle the execution of a list of callbacks during the execution of a
+    benchmark."""
 
     def __init__(self, callbacks: List[Callback], call_every_ms: int = 100):
         """Initialize the CallbackHandler.
@@ -33,8 +40,10 @@ class CallbackHandler:
         self.thread.start()
 
     def callback_loop(self):
-        """Method to be executed by the handler's thread. It activates the callbacks at
-        the specified time interval."""
+        """Method to be executed by the handler's thread.
+
+        It activates the callbacks at the specified time interval.
+        """
         self.start_time = time.time()
         while self.running:
             for callback in self.callbacks:
@@ -54,8 +63,8 @@ class CallbackHandler:
             self.thread.join()
 
     def collect(self, reset: bool = False) -> Dict[str, Any]:
-        """Collect data from the callbacks. It collects data from all the callbacks and returns
-        a dictionary with the data collected.
+        """Collect data from the callbacks. It collects data from all the callbacks and
+        returns a dictionary with the data collected.
 
         Args:
             reset (bool): If True, the callbacks should reset the data collected.
