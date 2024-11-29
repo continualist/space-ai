@@ -1,20 +1,31 @@
 .DEFAULT_GOAL := check
 
-clean:
-	rm -rf docs/source/api/_autosummary
-
 check:
 	pre-commit run -a
-
-isort:
-	pycln --config=pyproject.toml spaceai
-	isort spaceai
 
 changelog:
 	cz bump --changelog
 
-install:
-	python3 -m venv .buildenv
-	.buildenv/bin/pip install poetry
-	.buildenv/bin/poetry install
-	rm -rf .buildenv
+setup:
+	python -m pip install --upgrade pip
+	pip install poetry
+	poetry config virtualenvs.create false
+	poetry install --with=dev,deploy --no-root
+
+format:
+	docformatter --config pyproject.toml --in-place spaceai
+	black --config=pyproject.toml spaceai
+	pycln --config=pyproject.toml spaceai
+	isort spaceai
+
+build: format
+	poetry build -v --no-cache --format wheel
+
+verify:
+	twine check --strict dist/*
+
+publish-test: build verify
+	poetry publish -r test-pypi --skip-existing -v
+
+publish: build verify
+	poetry publish --skip-existing -v
