@@ -22,15 +22,15 @@ from spaceai.data import (
     ESA,
     ESAMission,
 )
-from spaceai.utils import data
-from spaceai.utils.callbacks import (
-    Callback,
+from spaceai.data.utils import seq_collate_fn
+from .callbacks import (
     CallbackHandler,
 )
 
 if TYPE_CHECKING:
     from spaceai.models.predictors import SequenceModel
     from spaceai.models.anomaly import AnomalyDetector
+    from .callbacks import Callback
 
 from tqdm import tqdm
 
@@ -122,14 +122,14 @@ class ESABenchmark(Benchmark):
                 train_channel,
                 batch_size=batch_size,
                 shuffle=True,
-                collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
+                collate_fn=seq_collate_fn(n_inputs=2, mode="batch"),
             )
             eval_loader = (
                 DataLoader(
                     eval_channel,
                     batch_size=batch_size,
                     shuffle=False,
-                    collate_fn=data.seq_collate_fn(n_inputs=2, mode="batch"),
+                    collate_fn=seq_collate_fn(n_inputs=2, mode="batch"),
                 )
                 if eval_channel is not None
                 else None
@@ -166,7 +166,7 @@ class ESABenchmark(Benchmark):
             test_channel,
             batch_size=1,
             shuffle=False,
-            collate_fn=data.seq_collate_fn(n_inputs=2, mode="time"),
+            collate_fn=seq_collate_fn(n_inputs=2, mode="time"),
         )
         callback_handler.start()
         predictor.stateful = True

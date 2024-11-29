@@ -14,8 +14,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from spaceai.utils.tools import (
-    download_and_extract_zip,
+from .utils import (
     download_file,
 )
 
@@ -232,13 +231,10 @@ class NASA(AnomalyDataset):
         nasa_dir = os.path.join(self.root, "NASA")
         data_dir = os.path.join(nasa_dir, "data")
         os.mkdir(nasa_dir)
-        os.rename(
-            os.path.join(self.root, "SMAP"),
-            data_dir
-        )
+        os.rename(os.path.join(self.root, "SMAP"), data_dir)
         os.rename(
             os.path.join(data_dir, "labeled_anomalies.csv"),
-            os.path.join(data_dir, "test", "anomalies.csv")
+            os.path.join(data_dir, "test", "anomalies.csv"),
         )
 
     def load_and_preprocess(self) -> Tuple[torch.Tensor, pd.DataFrame]:
