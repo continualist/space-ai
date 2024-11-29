@@ -8,14 +8,14 @@ from spaceai.models.predictors import ESN
 
 from torch import nn
 
-from spaceai.utils.callbacks import SystemMonitorCallback
+from spaceai.benchmark.callbacks import SystemMonitorCallback
 
 
 def main():
     benchmark = NASABenchmark(
-        run_id="nasa_esn_rr", 
-        exp_dir="experiments", 
-        seq_length=250, 
+        run_id="nasa_esn_rr",
+        exp_dir="experiments",
+        seq_length=250,
         n_predictions=10,
         data_root="datasets",
     )
@@ -23,21 +23,20 @@ def main():
 
     channels = NASA.channel_ids
     for i, channel_id in enumerate(channels):
-        print(f'{i+1}/{len(channels)}: {channel_id}')
+        print(f"{i+1}/{len(channels)}: {channel_id}")
 
         nasa_channel = NASA(
-            "datasets", 
-            channel_id, 
-            mode="anomaly", 
-            train=False, 
+            "datasets",
+            channel_id,
+            mode="anomaly",
+            train=False,
         )
 
         detector = Telemanom(
-            pruning_factor=0.13, 
-            force_early_anomaly=channel_id == 'C-2'
+            pruning_factor=0.13, force_early_anomaly=channel_id == "C-2"
         )
         predictor = ESN(
-            nasa_channel.in_features_size, 
+            nasa_channel.in_features_size,
             [80, 80],
             10,
             reduce_out="mean",
@@ -57,17 +56,16 @@ def main():
             restore_predictor=False,
             callbacks=callbacks,
         )
-        
+
     results_df = pd.read_csv(os.path.join(benchmark.run_dir, "results.csv"))
-    tp = results_df['true_positives'].sum()
-    fp = results_df['false_positives'].sum()
-    fn = results_df['false_negatives'].sum()
+    tp = results_df["true_positives"].sum()
+    fp = results_df["false_positives"].sum()
+    fn = results_df["false_negatives"].sum()
 
     total_precision = tp / (tp + fp)
     total_recall = tp / (tp + fn)
-    total_f1 = 2 * (total_precision * total_recall) / \
-        (total_precision + total_recall)
-    
+    total_f1 = 2 * (total_precision * total_recall) / (total_precision + total_recall)
+
     print("True Positives: ", tp)
     print("False Positives: ", fp)
     print("False Negatives: ", fn)
