@@ -1,50 +1,30 @@
-# SpaceAI
-Repository for providing off-the-shelf benchmarks for AI-based aerospace applications.
+<p align="center">
+<picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/continualist/space-ai/refs/heads/main/docs/_static/images/logo.jpeg?"><img width=450 alt="spaceai-logo" src="https://raw.githubusercontent.com/continualist/space-ai/refs/heads/main/docs/_static/images/logo.jpeg"/>
+</picture>
+</p>
 
+![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Feclypse-org%2Feclypse%2Fmain%2Fpyproject.toml)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&)](https://github.com/pre-commit/pre-commit)
+[![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
-### Getting started
+[![Import sorted with isort](https://img.shields.io/badge/isort-checked-brightgreen)](https://pycqa.github.io/isort/)
+[![IMport cleaned with pycln](https://img.shields.io/badge/pycln-checked-brightgreen)](https://github.com/hadialqattan/pycln)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-black)](https://github.com/psf/black)
+[![Doc style: docformatter](https://img.shields.io/badge/doc%20style-docformatter-black)](https://github.com/PyCQA/docformatter)
 
-**Installing this codebase requires Python 3.10 or 3.11.**
-Run the following commands within your python virtual environment:
+SpaceAI is a comprehensive library designed for space mission data analysis and machine learning model benchmarking. It provides tools for data preprocessing, model training, and evaluation, specifically tailored for space-related datasets. The library includes implementations of various machine learning models, such as ESNs (Echo State Networks) and LSTMs (Long Short-Term Memory networks), and offers a range of utilities to facilitate the development and testing of these models. With SpaceAI, researchers and engineers can streamline their workflow and focus on deriving insights from space mission data.
 
-```sh
-pip install poetry
+Here's the link to the documentation: [https://spaceai.readthedocs.io/en/latest/](https://spaceai.readthedocs.io/en/latest/)
 
-git clone https://github.com/continualist/space-ai.git
-cd space-ai
-poetry install
+## Installation
+
+To install SpaceAI and all its dependencies, you can run the following commands:
+```bash
+
+pip install space-ai
+
 ```
 
-# NASA Data (SMAP, MSL)
-
-
-## Anomaly labels and metadata
-
-The anomaly labels and metadata are available in `labeled_anomalies.csv`, which includes:
-
-- `channel id`: anonymized channel id - first letter represents nature of channel (P = power, R = radiation, etc.)
-- `spacecraft`: spacecraft that generated telemetry stream
-- `anomaly_sequences`: start and end indices of true anomalies in stream
-- `class`: the class of anomaly (see paper for discussion)
-- `num values`: number of telemetry values in each stream
-
-To provide your own labels, use the `labeled_anomalies.csv` file as a template. The only required fields/columns are `channel_id` and `anomaly_sequences`. `anomaly_sequences` is a list of lists that contain start and end indices of anomalous regions in the test dataset for a channel.
-
-## Dataset and performance statistics:
-
-#### Data
-|								  | SMAP 	  | MSL		 | Total   |
-| ------------------------------- |	:-------: |	:------: | :------:|
-| Total anomaly sequences 		  | 69        | 36		 | 105	   |
-| *Point* anomalies (% tot.)	  | 43 (62%)  | 19 (53%) | 62 (59%)|
-| *Contextual* anomalies (% tot.) | 26 (38%)  | 17 (47%) | 43 (41%)|
-| Unique telemetry channels		  | 55        | 27		 | 82	   |
-| Unique ISAs					  | 28		  | 19		 | 47	   |
-| Telemetry values evaluated	  | 429,735	  | 66,709   | 496,444 |
-
-#### Performance (with default params specified in paper)
-| Spacecraft		| Precision | Recall   | F_0.5 Score |
-| ----------------- | :-------: | :------: | :------: |
-| SMAP 		  		| 85.5%     | 85.5%	   | 0.71	  |
-| Curiosity (MSL)	| 92.6%  	| 69.4%    | 0.69     |
-| Total 			| 87.5% 	| 80.0%	   | 0.71     |
+## Credits
+We thank [eclypse-org](https://github.com/eclypse-org) and [Jacopo Massa](https://github.com/jacopo-massa) for the structure and the template of the documentation!

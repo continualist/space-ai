@@ -15,9 +15,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from spaceai.utils.tools import download_and_extract_zip
-
 from .anomaly_dataset import AnomalyDataset
+from .utils import download_and_extract_zip
 
 
 class AnnotationLabel(
