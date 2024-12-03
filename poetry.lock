@@ -2695,13 +2695,17 @@ files = [
 
 [[package]]
 name = "torchdyno"
-version = "0.2.2"
+version = "0.2.3"
 description = "A PyTorch-based library for Reservoir Computing and dynamical systems."
 optional = false
 python-versions = "<4.0,>=3.10"
 files = [
-    {file = "torchdyno-0.2.2-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:84a937512ff4908c2e12f0afe5b2b2a176cecaa2f91e881a7d0c97f03c674411"},
-    {file = "torchdyno-0.2.2-cp311-cp311-manylinux_2_35_x86_64.whl", hash = "sha256:c2667986753e165505f2b7ff9a514aa710ddd5d8dce4f7bf08f088972e3a9a5e"},
+    {file = "torchdyno-0.2.3-cp310-cp310-macosx_14_0_arm64.whl", hash = "sha256:43392380a659a2a03a4bc44534977a506516e218ada49c11e9a9db637d8a02a3"},
+    {file = "torchdyno-0.2.3-cp310-cp310-manylinux_2_35_x86_64.whl", hash = "sha256:fce451fdf2b9c06730ac23557cebbd1b6a1c8b2060687ddf3e71fd52989dafc9"},
+    {file = "torchdyno-0.2.3-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:92fa65aefe685ca4557a0bc65a36d86b6bd33e155b614e073189828ea1e30bb2"},
+    {file = "torchdyno-0.2.3-cp311-cp311-manylinux_2_35_x86_64.whl", hash = "sha256:bbba52fcdd225584aa63a3178204846e9f4bffc1f6c3ad3cd6a3b4154175f38c"},
+    {file = "torchdyno-0.2.3-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:1bc706fb8eb69c52f1c15f9ba4af5f94af52caa22ae21dd01411e0ef23afe1f3"},
+    {file = "torchdyno-0.2.3-cp312-cp312-manylinux_2_35_x86_64.whl", hash = "sha256:a0cbb24ef8ba4faa7176aaad8aa90622d05dbf558c23d88db3b425c84dafaf5d"},
 ]
 
 [package.dependencies]
@@ -3142,4 +3146,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "cc29fa362d3bbb78128e6417d49e294e341fc4ca5dcc51dbc2951aa9e05e40eb"
+content-hash = "54f50d3b3e4fe5c49f3812c63d3b5904fd819741b0388f1bf663a2c3c18e478a"

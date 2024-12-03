@@ -28,7 +28,7 @@ tqdm = "^4.66.5"
 datetime = "^5.5"
 requests = "^2.32.3"
 psutil = "^6.1.0"
-torchdyno = "^0.2.2"
+torchdyno = "^0.2.3"
 
 [tool.poetry.group.dev]
 optional = true
