@@ -29,5 +29,5 @@ jobs:
 
       - name: Upload to PyPI
         run: |
-          poetry config pypi-token.pypi ${{ secrets.BOOSTRAP_PYPI }}
+          poetry config pypi-token.pypi ${{ secrets.BOOTSTRAP_PYPI }}
           poetry publish --skip-existing -vv --no-interaction
