@@ -1,0 +1,3 @@
+[submodule "EO-ThesisCode"]
+	path = EO-ThesisCode
+	url = git@github.com:DiPalmaGiuseppe/Earth-Observation.git

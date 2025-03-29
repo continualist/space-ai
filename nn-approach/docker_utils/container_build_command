@@ -1,0 +1,1 @@
+sudo docker run -d --runtime=nvidia --gpus all --name hyperview -v /disk4/gdpalma/SoilEstimation:/root/data efficiency_comparison tail -f /dev/null

@@ -1,0 +1,1 @@
+nohup docker exec a5fea59c9a82 /bin/bash -c "source /root/space-ai/nn-approach/hyperview/hyperenv/bin/activate && python -u /root/space-ai/nn-approach/hyperview/swin_transformer.py" &

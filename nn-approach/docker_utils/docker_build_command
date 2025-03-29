@@ -1,0 +1,1 @@
+DOCKER_BUILDKIT=1 docker build --build-arg TARGETARCH=amd64 -t efficiency_comparison .
